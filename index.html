@@ -212,9 +212,9 @@ tbody td strong{color:var(--text);font-weight:600}
       <input type="password" id="s-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
       <span class="helper" style="margin-top:2px"><a href="https://github.com/settings/tokens/new?scopes=gist&description=TimeTracker" target="_blank" rel="noopener">→ Create token</a> (needs <strong>gist</strong> scope)</span>
     </div>
-    <div class="input-group">
-      <label>Gist ID <span style="font-weight:400;text-transform:none;letter-spacing:0">(leave empty on very first setup)</span></label>
-      <input type="text" id="s-gistid" placeholder="e.g. a1b2c3d4e5f6… (find at gist.github.com)">
+    <div class="input-group" id="gistid-row" style="display:none">
+      <label>Gist ID</label>
+      <input type="text" id="s-gistid" placeholder="e.g. a1b2c3d4e5f6…">
     </div>
     <div class="input-group">
       <label>Password</label>
@@ -257,8 +257,7 @@ tbody td strong{color:var(--text);font-weight:600}
         <span class="spin-sm"></span> Syncing…
       </span>
       <span class="sync-badge" id="sync-ok" style="display:none;color:#0ea572">✓ Synced</span>
-      <button class="btn btn-outline btn-sm" id="bake-btn" onclick="savePersonalizedCopy()" style="display:none" title="Download index.html with your token &amp; gist baked in — push to GitHub so all devices only need password">⬇ Save personalized copy</button>
-      <button class="btn btn-outline btn-sm" onclick="openChangePassword()">Change Password</button>
+<button class="btn btn-outline btn-sm" onclick="openChangePassword()">Change Password</button>
       <button class="btn btn-outline btn-sm" onclick="logout()">Logout</button>
     </div>
   </header>
@@ -465,11 +464,10 @@ async function decryptPayload(blob, password) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// HARDCODED CREDENTIALS  (baked in via "Save personalized copy")
-// Leave as empty strings — filled in by the download function
+// BAKED GIST ID  (safe to publish — data inside is encrypted)
+// Token is stored encrypted inside the Gist, never in the HTML
 // ══════════════════════════════════════════════════════════════════
-const BAKED_TOKEN   = '';
-const BAKED_GIST_ID = '';
+const BAKED_GIST_ID = '78c265eb503b78dddfe06ac8e19c726c';
 
 // ══════════════════════════════════════════════════════════════════
 // LOCAL STORAGE  (only non-sensitive config + running task)
@@ -507,16 +505,21 @@ async function gistFetch(method, path, body) {
   return res.json();
 }
 
+// Gist is fetched anonymously using its public URL — no token needed to read
 async function readGist() {
-  const id = get(LS.GIST_ID);
-  const gist = await gistFetch('GET', `/gists/${id}`);
+  const id = get(LS.GIST_ID) || BAKED_GIST_ID;
+  const res = await fetch(`https://api.github.com/gists/${id}`, {
+    headers: { 'Accept': 'application/vnd.github+json' }
+  });
+  if (!res.ok) throw new Error(`Gist fetch failed: ${res.status}`);
+  const gist = await res.json();
   const content = gist.files[GIST_FILE]?.content;
   if (!content) return null;
   return JSON.parse(content);
 }
 
 async function writeGist(blob) {
-  const id = get(LS.GIST_ID);
+  const id = get(LS.GIST_ID) || BAKED_GIST_ID;
   await gistFetch('PATCH', `/gists/${id}`, {
     files: { [GIST_FILE]: { content: JSON.stringify(blob, null, 2) } }
   });
@@ -534,20 +537,27 @@ async function createNewGist(blob) {
 // ══════════════════════════════════════════════════════════════════
 // SESSION STATE  (in-memory after decryption)
 // ══════════════════════════════════════════════════════════════════
-let currentPassword = null;  // held in memory, never persisted
-let sessions = [];           // decrypted sessions array
+let currentPassword = null;
+let sessions = [];
 
 async function loadSessions() {
   const blob = await readGist();
   if (!blob) { sessions = []; return; }
   const data = await decryptPayload(blob, currentPassword);
   sessions = data.sessions || [];
+  // decrypt and cache the token in localStorage so writes work
+  if (data.encToken) {
+    const token = await decryptPayload(data.encToken, currentPassword).catch(() => null);
+    if (token) set(LS.TOKEN, token);
+  }
 }
 
 async function saveSessions() {
   showSync(true);
   try {
-    const blob = await encryptPayload({ sessions }, currentPassword);
+    const token = get(LS.TOKEN);
+    const encToken = token ? await encryptPayload(token, currentPassword) : null;
+    const blob = await encryptPayload({ sessions, encToken }, currentPassword);
     await writeGist(blob);
     showSync(false, true);
   } catch (e) {
@@ -561,7 +571,7 @@ async function saveSessions() {
 // ══════════════════════════════════════════════════════════════════
 async function doSetup() {
   const token  = document.getElementById('s-token').value.trim();
-  const gistId = document.getElementById('s-gistid').value.trim();
+  const gistId = (document.getElementById('s-gistid').value.trim()) || BAKED_GIST_ID;
   const pass   = document.getElementById('s-pass').value;
   const err    = document.getElementById('s-err');
   const btn    = document.getElementById('s-btn');
@@ -580,15 +590,18 @@ async function doSetup() {
     });
     if (!res.ok) throw new Error('Invalid GitHub token');
     set(LS.TOKEN, token);
+    set(LS.GIST_ID, gistId);
     currentPassword = pass;
 
     if (gistId) {
-      set(LS.GIST_ID, gistId);
       setLoadingMsg('Fetching and decrypting your data…');
       await loadSessions();
+      // re-save to bake encrypted token into gist if not already there
+      await saveSessions();
     } else {
       setLoadingMsg('Creating your encrypted data store…');
-      const blob = await encryptPayload({ sessions: [] }, pass);
+      const encToken = await encryptPayload(token, pass);
+      const blob = await encryptPayload({ sessions: [], encToken }, pass);
       const id   = await createNewGist(blob);
       set(LS.GIST_ID, id);
       sessions = [];
@@ -673,10 +686,7 @@ async function enterApp() {
   document.getElementById('view-dashboard').style.flexDirection = 'column';
   document.getElementById('view-dashboard').style.gap = '20px';
   document.getElementById('view-timeline').style.display = 'none';
-  if (!BAKED_TOKEN || !BAKED_GIST_ID) {
-    document.getElementById('bake-btn').style.display = 'inline-flex';
-  }
-  const active = get(LS.ACTIVE);
+const active = get(LS.ACTIVE);
   active ? showActiveUI(active) : showIdleUI();
   renderDashboard();
   setInterval(() => { if (get(LS.ACTIVE)) { renderDashboard(); if (currentView==='timeline') renderTimeline(); } }, 10000);
@@ -1234,35 +1244,14 @@ document.getElementById('login-pass').addEventListener('keydown', e => { if (e.k
 document.getElementById('s-pass').addEventListener('keydown', e => { if (e.key==='Enter') doSetup(); });
 
 // ══════════════════════════════════════════════════════════════════
-// SAVE PERSONALIZED COPY
-// ══════════════════════════════════════════════════════════════════
-async function savePersonalizedCopy() {
-  const token  = get(LS.TOKEN);
-  const gistId = get(LS.GIST_ID);
-  const src    = await fetch(location.href).then(r => r.text());
-  const baked  = src
-    .replace("const BAKED_TOKEN   = '';", `const BAKED_TOKEN   = '${token}';`)
-    .replace("const BAKED_GIST_ID = '';", `const BAKED_GIST_ID = '${gistId}';`);
-  const blob = new Blob([baked], { type: 'text/html' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = 'index.html'; a.click();
-  URL.revokeObjectURL(url);
-  toast('Downloaded — replace your repo\'s index.html with this file and push');
-}
-
-// ══════════════════════════════════════════════════════════════════
 // BOOT
 // ══════════════════════════════════════════════════════════════════
 (function boot() {
-  // If credentials are baked in, store them and go straight to login
-  if (BAKED_TOKEN && BAKED_GIST_ID) {
-    set(LS.TOKEN,   BAKED_TOKEN);
-    set(LS.GIST_ID, BAKED_GIST_ID);
-  }
-  const hasToken = !!get(LS.TOKEN);
-  const hasGist  = !!get(LS.GIST_ID);
-  if (hasToken && hasGist) showScreen('screen-login');
+  // Gist ID is safe to bake — data inside is encrypted, token is not here
+  if (BAKED_GIST_ID) set(LS.GIST_ID, BAKED_GIST_ID);
+  // Show login if we have a gist (token will be decrypted from gist on login)
+  // Show setup only if no gist known at all
+  if (get(LS.GIST_ID)) showScreen('screen-login');
   else showScreen('screen-setup');
 })();
 </script>
