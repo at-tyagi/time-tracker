@@ -547,6 +547,21 @@ async function loadFromGist() {
   const data = await decryptPayload(blob, currentPassword);
   sessions   = data.sessions   || [];
   activeTask = data.active     || null;
+  // Auto-stop task if no heartbeat for 2 hours (device was closed without stopping)
+  if (activeTask) {
+    const lastBeat = activeTask.heartbeat || activeTask.startTs;
+    if (Date.now() - lastBeat > 2 * 60 * 60 * 1000) {
+      const endTs = lastBeat; // end at last known heartbeat, not now
+      sessions.unshift({
+        id: crypto.randomUUID(), name: activeTask.name,
+        startISO: activeTask.startISO, endISO: new Date(endTs).toISOString(),
+        durationMs: endTs - activeTask.startTs,
+        autoStopped: true
+      });
+      activeTask = null;
+      await saveToGist().catch(() => {});
+    }
+  }
   if (data.encToken) {
     const token = await decryptPayload(data.encToken, currentPassword).catch(() => null);
     if (token) set(LS.TOKEN, token);
@@ -693,7 +708,21 @@ async function enterApp() {
   document.getElementById('view-timeline').style.display = 'none';
   activeTask ? showActiveUI(activeTask) : showIdleUI();
   renderDashboard();
-  setInterval(() => { if (activeTask) { renderDashboard(); if (currentView==='timeline') renderTimeline(); } }, 10000);
+  // Poll Gist every 30s so changes on other devices appear here automatically
+  setInterval(async () => {
+    try {
+      await loadFromGist();
+      renderDashboard();
+      if (currentView === 'timeline') renderTimeline();
+      // Re-sync timer UI if active state changed
+      if (activeTask) {
+        showActiveUI(activeTask);
+      } else {
+        clearInterval(timerInterval); timerInterval = null;
+        showIdleUI();
+      }
+    } catch (_) { /* silent — offline or transient error */ }
+  }, 30000);
 }
 
 
@@ -748,6 +777,7 @@ async function stopTask() {
   sessions.unshift(session);
   activeTask = null;
   clearInterval(timerInterval); timerInterval = null;
+  if (window._heartbeatInterval) { clearInterval(window._heartbeatInterval); window._heartbeatInterval = null; }
   showIdleUI();
   renderDashboard();
   if (currentView === 'timeline') renderTimeline();
@@ -1100,12 +1130,19 @@ async function startTaskFrom(src) {
   const inp = document.getElementById(src === 'tl' ? 'tl-task-name' : 'task-name');
   const name = inp.value.trim().toLowerCase();
   if (!name) { toast('Enter a task name first'); return; }
-  activeTask = { name, startTs: Date.now(), startISO: new Date().toISOString() };
+  activeTask = { name, startTs: Date.now(), startISO: new Date().toISOString(), heartbeat: Date.now() };
   inp.value = '';
   showActiveUI(activeTask);
   renderDashboard();
   if (currentView === 'timeline') renderTimeline();
   await saveToGist();
+  // Update heartbeat every 60s so other devices know this tab is alive
+  if (window._heartbeatInterval) clearInterval(window._heartbeatInterval);
+  window._heartbeatInterval = setInterval(async () => {
+    if (!activeTask) { clearInterval(window._heartbeatInterval); return; }
+    activeTask.heartbeat = Date.now();
+    await saveToGist().catch(() => {});
+  }, 60000);
 }
 
 // ══════════════════════════════════════════════════════════════════
