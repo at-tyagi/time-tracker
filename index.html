@@ -293,15 +293,13 @@ tbody td strong{color:var(--text);font-weight:600}
             <div class="active-name" id="active-name">—</div>
             <div class="active-meta" id="active-start">Started —</div>
           </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-            <div style="display:flex;align-items:center;gap:14px">
-              <div class="timer" id="timer">00:00:00</div>
-              <button class="btn btn-danger" onclick="stopTask()">■ Stop</button>
-            </div>
-            <div id="last-sync-label" style="font-size:0.7rem;color:var(--muted);opacity:0.6"></div>
+          <div style="display:flex;align-items:center;gap:14px">
+            <div class="timer" id="timer">00:00:00</div>
+            <button class="btn btn-danger" onclick="stopTask()">■ Stop</button>
           </div>
         </div>
       </div>
+      <div id="last-sync-label" style="font-size:0.7rem;color:var(--muted);opacity:0.55;text-align:right;margin-top:4px;padding-right:2px"></div>
     </div>
 
     <!-- FILTERS -->
@@ -711,22 +709,18 @@ async function enterApp() {
   document.getElementById('view-timeline').style.display = 'none';
   activeTask ? showActiveUI(activeTask) : showIdleUI();
   renderDashboard();
-  // Poll Gist every 30s so changes on other devices appear here automatically
-  setInterval(async () => {
+  // Poll Gist immediately, then every 30s
+  async function pollGist() {
     try {
       await loadFromGist();
       renderDashboard();
       if (currentView === 'timeline') renderTimeline();
-      // Re-sync timer UI if active state changed
-      if (activeTask) {
-        showActiveUI(activeTask);
-      } else {
-        clearInterval(timerInterval); timerInterval = null;
-        showIdleUI();
-      }
+      if (activeTask) { showActiveUI(activeTask); } else { clearInterval(timerInterval); timerInterval = null; showIdleUI(); }
       updateSyncLabel();
-    } catch (_) { /* silent — offline or transient error */ }
-  }, 30000);
+    } catch (_) { /* silent */ }
+  }
+  pollGist();
+  setInterval(pollGist, 30000);
 }
 
 
