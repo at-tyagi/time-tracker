@@ -257,6 +257,7 @@ tbody td strong{color:var(--text);font-weight:600}
         <span class="spin-sm"></span> Syncing…
       </span>
       <span class="sync-badge" id="sync-ok" style="display:none;color:#0ea572">✓ Synced</span>
+      <button class="btn btn-outline btn-sm" id="bake-btn" onclick="savePersonalizedCopy()" style="display:none" title="Download index.html with your token &amp; gist baked in — push to GitHub so all devices only need password">⬇ Save personalized copy</button>
       <button class="btn btn-outline btn-sm" onclick="openChangePassword()">Change Password</button>
       <button class="btn btn-outline btn-sm" onclick="logout()">Logout</button>
     </div>
@@ -464,12 +465,19 @@ async function decryptPayload(blob, password) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// HARDCODED CREDENTIALS  (baked in via "Save personalized copy")
+// Leave as empty strings — filled in by the download function
+// ══════════════════════════════════════════════════════════════════
+const BAKED_TOKEN   = '';
+const BAKED_GIST_ID = '';
+
+// ══════════════════════════════════════════════════════════════════
 // LOCAL STORAGE  (only non-sensitive config + running task)
 // ══════════════════════════════════════════════════════════════════
 const LS = {
   GIST_ID: 'tt_gist_id',
   TOKEN:   'tt_gh_token',
-  ACTIVE:  'tt_active',      // running task (name + startTs) — not sensitive
+  ACTIVE:  'tt_active',
 };
 const get  = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
 const set  = (k,v) => localStorage.setItem(k, JSON.stringify(v));
@@ -665,6 +673,9 @@ async function enterApp() {
   document.getElementById('view-dashboard').style.flexDirection = 'column';
   document.getElementById('view-dashboard').style.gap = '20px';
   document.getElementById('view-timeline').style.display = 'none';
+  if (!BAKED_TOKEN || !BAKED_GIST_ID) {
+    document.getElementById('bake-btn').style.display = 'inline-flex';
+  }
   const active = get(LS.ACTIVE);
   active ? showActiveUI(active) : showIdleUI();
   renderDashboard();
@@ -1223,9 +1234,32 @@ document.getElementById('login-pass').addEventListener('keydown', e => { if (e.k
 document.getElementById('s-pass').addEventListener('keydown', e => { if (e.key==='Enter') doSetup(); });
 
 // ══════════════════════════════════════════════════════════════════
+// SAVE PERSONALIZED COPY
+// ══════════════════════════════════════════════════════════════════
+async function savePersonalizedCopy() {
+  const token  = get(LS.TOKEN);
+  const gistId = get(LS.GIST_ID);
+  const src    = await fetch(location.href).then(r => r.text());
+  const baked  = src
+    .replace("const BAKED_TOKEN   = '';", `const BAKED_TOKEN   = '${token}';`)
+    .replace("const BAKED_GIST_ID = '';", `const BAKED_GIST_ID = '${gistId}';`);
+  const blob = new Blob([baked], { type: 'text/html' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'index.html'; a.click();
+  URL.revokeObjectURL(url);
+  toast('Downloaded — replace your repo\'s index.html with this file and push');
+}
+
+// ══════════════════════════════════════════════════════════════════
 // BOOT
 // ══════════════════════════════════════════════════════════════════
 (function boot() {
+  // If credentials are baked in, store them and go straight to login
+  if (BAKED_TOKEN && BAKED_GIST_ID) {
+    set(LS.TOKEN,   BAKED_TOKEN);
+    set(LS.GIST_ID, BAKED_GIST_ID);
+  }
   const hasToken = !!get(LS.TOKEN);
   const hasGist  = !!get(LS.GIST_ID);
   if (hasToken && hasGist) showScreen('screen-login');
