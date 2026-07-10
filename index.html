@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Time Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<noscript><style>body{display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui;background:#0f1117;color:#e2e8f0}</style><p>JavaScript is required.</p></noscript>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+:root {
+  --bg:#f0f2ff;
+  --surface:#ffffff;
+  --surface2:#f5f6ff;
+  --surface3:#eef0fb;
+  --accent:#5b5ef6;
+  --accent-light:#eeefff;
+  --green:#0ea572;
+  --green-light:#d1fae5;
+  --red:#e5484d;
+  --red-light:#ffe4e6;
+  --text:#111827;
+  --text2:#374151;
+  --muted:#6b7280;
+  --muted2:#9ca3af;
+  --border:#e5e7eb;
+  --border2:#d1d5db;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 12px rgba(0,0,0,.08),0 2px 4px rgba(0,0,0,.04);
+  --radius:14px;
+  --radius-sm:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
+
+/* ── INPUTS ── */
+input[type="password"],input[type="text"],input[type="date"]{
+  background:var(--surface);border:1.5px solid var(--border);color:var(--text);
+  border-radius:var(--radius-sm);padding:10px 14px;font-size:.9rem;width:100%;
+  outline:none;transition:border-color .2s,box-shadow .2s;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.04)
+}
+input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(91,94,246,.12)}
+input::placeholder{color:var(--muted2)}
+.input-group{display:flex;flex-direction:column;gap:5px}
+.input-group label{font-size:.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.07em}
+.helper{font-size:.78rem;color:var(--muted);line-height:1.6;background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;border:1px solid var(--border)}
+.helper a{color:var(--accent);text-decoration:none;font-weight:500}
+.helper a:hover{text-decoration:underline}
+.helper strong{color:var(--text2)}
+
+/* ── BUTTONS ── */
+.btn{background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);
+  padding:10px 20px;font-size:.88rem;font-weight:600;cursor:pointer;
+  transition:all .15s;display:inline-flex;align-items:center;gap:6px;
+  box-shadow:0 1px 3px rgba(91,94,246,.3),0 1px 2px rgba(91,94,246,.2)}
+.btn:hover{background:#4a4de8;box-shadow:0 4px 12px rgba(91,94,246,.35)}
+.btn:active{transform:scale(.97);box-shadow:none}
+.btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.btn-full{width:100%;justify-content:center;padding:11px}
+.btn-danger{background:var(--red);box-shadow:0 1px 3px rgba(229,72,77,.25)}
+.btn-danger:hover{background:#d13d42;box-shadow:0 4px 10px rgba(229,72,77,.3)}
+.btn-green{background:var(--green);box-shadow:0 1px 3px rgba(14,165,114,.25)}
+.btn-green:hover{background:#0a8c60;box-shadow:0 4px 10px rgba(14,165,114,.3)}
+.btn-outline{background:var(--surface);border:1.5px solid var(--border2);color:var(--text2);box-shadow:var(--shadow)}
+.btn-outline:hover{background:var(--surface2);border-color:var(--border2);box-shadow:var(--shadow-md)}
+.btn-sm{padding:6px 13px;font-size:.78rem}
+.err{color:var(--red);font-size:.8rem;min-height:18px;font-weight:500}
+
+/* ── SCREENS ── */
+.screen{display:none;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:20px;padding:20px;background:var(--bg)}
+.screen.active{display:flex}
+.card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:36px;width:100%;max-width:400px;display:flex;flex-direction:column;gap:18px;box-shadow:var(--shadow-md)}
+.card h1{font-size:1.35rem;font-weight:800;text-align:center;color:var(--text);letter-spacing:-.02em}
+.card h2{font-size:.95rem;font-weight:700;color:var(--text2)}
+.card>p{color:var(--muted);font-size:.85rem;text-align:center}
+.steps{display:flex;gap:5px;justify-content:center}
+.step{width:32px;height:3px;border-radius:2px;background:var(--border2)}
+.step.done{background:var(--accent)}
+.step.active{background:var(--accent);opacity:.4}
+.screen-sub{font-size:.78rem;color:var(--muted);text-align:center}
+.screen-sub a{color:var(--accent);text-decoration:none;font-weight:500}
+.screen-sub a:hover{text-decoration:underline}
+
+/* ── LOADING ── */
+#screen-loading{background:var(--bg)}
+.spinner{width:34px;height:34px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-msg{color:var(--muted);font-size:.85rem;font-weight:500}
+
+/* ── APP ── */
+#app{display:none}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:10;box-shadow:0 1px 0 var(--border)}
+header h1{font-size:.95rem;font-weight:800;display:flex;align-items:center;gap:8px;color:var(--text);letter-spacing:-.01em}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted2);flex-shrink:0}
+.dot.active{background:var(--green);box-shadow:0 0 0 3px var(--green-light);animation:pulse 1.8s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 3px var(--green-light)}50%{box-shadow:0 0 0 5px var(--green-light)}}
+.sync-badge{font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:5px;font-weight:500}
+.sync-badge .spin-sm{width:10px;height:10px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+.hdr-right{display:flex;align-items:center;gap:8px}
+main{max-width:1100px;margin:0 auto;padding:24px 20px;display:flex;flex-direction:column;gap:20px}
+
+/* ── TRACKER ── */
+.tracker-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px 24px;box-shadow:var(--shadow)}
+.section-label{font-size:.68rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.09em;margin-bottom:12px}
+.tracker-form{display:flex;gap:10px;flex-wrap:wrap}
+.tracker-form input{flex:1;min-width:200px}
+.active-task{background:linear-gradient(135deg,#f5f6ff 0%,#eeefff 100%);border:1.5px solid #c7c9fb;border-radius:10px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.active-name{font-weight:700;font-size:1rem;color:var(--text)}
+.active-meta{color:var(--muted);font-size:.8rem;margin-top:2px}
+.timer{font-size:1.85rem;font-weight:800;font-variant-numeric:tabular-nums;color:var(--accent);font-family:'Inter',monospace;letter-spacing:-.02em}
+
+/* ── FILTERS ── */
+.filter-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 18px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;box-shadow:var(--shadow)}
+.qf-btn{background:var(--surface2);border:1.5px solid var(--border);color:var(--text2);border-radius:6px;padding:5px 13px;font-size:.78rem;font-weight:500;cursor:pointer;transition:all .15s}
+.qf-btn:hover{border-color:var(--accent);color:var(--accent);background:#f0f1ff}
+.qf-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 4px rgba(91,94,246,.3)}
+.filter-group{display:flex;align-items:center;gap:8px}
+.filter-group label{font-size:.75rem;color:var(--muted);font-weight:500;white-space:nowrap}
+.filter-group input[type="date"]{padding:6px 10px;font-size:.8rem;width:auto}
+
+/* ── STATS ── */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:14px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+.stat-card .lbl{font-size:.68rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px}
+.stat-card .val{font-size:1.5rem;font-weight:800;color:var(--text);letter-spacing:-.02em}
+.stat-card .sub{font-size:.73rem;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ── CHARTS ── */
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:680px){.charts-grid{grid-template-columns:1fr}}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+.chart-card h3{font-size:.68rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.09em;margin-bottom:14px}
+.chart-wrap{position:relative;height:260px}
+.chart-full{grid-column:1/-1}
+.chart-empty{display:flex;align-items:center;justify-content:center;height:200px;color:var(--muted2);font-size:.85rem}
+
+/* ── TABLE ── */
+.sessions-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.card-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;background:var(--surface2)}
+.card-header h3{font-size:.68rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.09em}
+.data-actions{display:flex;gap:8px;flex-wrap:wrap}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead th{padding:9px 16px;text-align:left;font-size:.68rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid var(--border);white-space:nowrap;background:var(--surface2)}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--surface2)}
+tbody td{padding:10px 16px;font-size:.875rem;color:var(--text2)}
+tbody td strong{color:var(--text);font-weight:600}
+.tag{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:.7rem;font-weight:700;letter-spacing:.03em}
+.tag-done{background:var(--green-light);color:#065f46}
+.tag-running{background:var(--accent-light);color:var(--accent)}
+.del-btn{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:.85rem;padding:5px 7px;border-radius:5px;transition:all .15s}
+.del-btn:hover{color:var(--red);background:var(--red-light)}
+.empty-state{text-align:center;padding:44px;color:var(--muted)}
+
+/* ── VIEW SWITCHER ── */
+.view-switcher{display:flex;gap:0;background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:4px;box-shadow:var(--shadow)}
+.view-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:9px 20px;border:none;background:none;border-radius:7px;cursor:pointer;font-size:.85rem;font-weight:600;color:var(--muted);transition:all .18s}
+.view-btn:hover{color:var(--text2);background:var(--surface2)}
+.view-btn.active{background:var(--accent);color:#fff;box-shadow:0 1px 4px rgba(91,94,246,.3)}
+.view-btn svg{width:15px;height:15px;flex-shrink:0}
+
+/* ── IST TIMELINE VIEW ── */
+#view-timeline{display:none}
+.tl-day-group{margin-bottom:6px}
+.tl-day-header{display:flex;align-items:center;gap:10px;padding:10px 20px 8px;position:sticky;top:58px;background:var(--bg);z-index:2}
+.tl-day-label{font-size:.78rem;font-weight:700;color:var(--text2)}
+.tl-day-total{font-size:.72rem;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:99px;padding:2px 10px}
+.tl-day-line{flex:1;height:1px;background:var(--border)}
+.tl-sessions{display:flex;flex-direction:column;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin:0 0 16px}
+.tl-row{display:grid;grid-template-columns:180px 1fr auto;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--border);transition:background .1s}
+.tl-row:last-child{border-bottom:none}
+.tl-row:hover{background:var(--surface2)}
+.tl-time{display:flex;flex-direction:column;gap:2px}
+.tl-start{font-size:.82rem;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.tl-end{font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.tl-bar-wrap{position:relative;height:6px;background:var(--surface3);border-radius:99px;overflow:hidden;min-width:60px}
+.tl-bar{height:100%;border-radius:99px;background:var(--accent)}
+.tl-name{font-size:.875rem;font-weight:600;color:var(--text)}
+.tl-dur{font-size:.78rem;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.tl-running-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:5px;animation:pulse 1.5s infinite}
+@media(max-width:600px){
+  .tl-row{grid-template-columns:140px 1fr auto}
+  .tl-bar-wrap{display:none}
+}
+
+/* ── MODAL ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(17,24,39,.35);backdrop-filter:blur(4px);align-items:center;justify-content:center;z-index:100}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:28px;width:340px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow-md)}
+.modal h2{font-size:.95rem;font-weight:700;color:var(--text)}
+.modal>p{font-size:.78rem;color:var(--muted)}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--text);color:#f9fafb;border-radius:8px;padding:9px 18px;font-size:.82rem;font-weight:500;z-index:999;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.15)}
+#toast.show{opacity:1}
+#toast.err-toast{background:var(--red)}
+</style>
+</head>
+<body>
+
+<!-- ══ SETUP SCREEN ══════════════════════════════════════════════ -->
+<div id="screen-setup" class="screen active">
+  <div class="card" id="setup-step-1">
+    <h1>⏱ Time Tracker</h1>
+    <p>Let's get you set up. This takes 2 minutes.</p>
+    <div class="steps"><div class="step active"></div><div class="step"></div><div class="step"></div></div>
+    <div class="input-group">
+      <label>Choose a strong password</label>
+      <input type="password" id="s1-pass" placeholder="Min 6 characters" autocomplete="new-password">
+    </div>
+    <div class="input-group">
+      <label>Confirm password</label>
+      <input type="password" id="s1-pass2" placeholder="Repeat password">
+    </div>
+    <p class="helper">Your password <strong>never</strong> leaves your device. It's used to encrypt your data with AES-256. Even if someone sees your Gist, they see only random bytes.</p>
+    <div class="err" id="s1-err"></div>
+    <button class="btn btn-full" onclick="setupStep1()">Continue →</button>
+  </div>
+
+  <div class="card" id="setup-step-2" style="display:none">
+    <h1>⏱ Time Tracker</h1>
+    <h2>GitHub Gist storage</h2>
+    <div class="steps"><div class="step done"></div><div class="step active"></div><div class="step"></div></div>
+    <p class="helper">
+      Your encrypted data is stored in a GitHub Gist. You need a Personal Access Token with <strong>gist</strong> scope.<br><br>
+      <a href="https://github.com/settings/tokens/new?scopes=gist&description=TimeTracker" target="_blank" rel="noopener">→ Create token on GitHub</a> (opens in new tab)
+    </p>
+    <div class="input-group">
+      <label>GitHub Personal Access Token</label>
+      <input type="password" id="s2-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+    </div>
+    <div class="err" id="s2-err"></div>
+    <button class="btn btn-full" onclick="setupStep2()">Verify token →</button>
+  </div>
+
+  <div class="card" id="setup-step-3" style="display:none">
+    <h1>⏱ Time Tracker</h1>
+    <h2>Create or link a Gist</h2>
+    <div class="steps"><div class="step done"></div><div class="step done"></div><div class="step active"></div></div>
+    <p class="helper">Create a new Gist for your data, or paste an existing Gist ID if you already have one.</p>
+    <button class="btn btn-full btn-green" onclick="createGist()" id="create-gist-btn">✦ Create new Gist</button>
+    <div style="text-align:center;color:var(--muted);font-size:.8rem">— or link existing —</div>
+    <div class="input-group">
+      <label>Existing Gist ID</label>
+      <input type="text" id="s3-gistid" placeholder="e.g. a1b2c3d4e5f6...">
+    </div>
+    <div class="err" id="s3-err"></div>
+    <button class="btn btn-full btn-outline" onclick="linkGist()">Link existing Gist →</button>
+  </div>
+</div>
+
+<!-- ══ LOGIN SCREEN ══════════════════════════════════════════════ -->
+<div id="screen-login" class="screen">
+  <div class="card">
+    <h1>⏱ Time Tracker</h1>
+    <p>Enter your password to decrypt and load your data</p>
+    <div class="input-group">
+      <label>Password</label>
+      <input type="password" id="login-pass" placeholder="Your encryption password" autocomplete="current-password">
+    </div>
+    <div class="err" id="login-err"></div>
+    <button class="btn btn-full" onclick="doLogin()" id="login-btn">Unlock &amp; Load</button>
+    <p class="screen-sub">
+      <a href="#" onclick="resetSetup(); return false;">Reset / use different account</a>
+    </p>
+  </div>
+</div>
+
+<!-- ══ LOADING SCREEN ════════════════════════════════════════════ -->
+<div id="screen-loading" class="screen">
+  <div class="spinner"></div>
+  <div class="loading-msg" id="loading-msg">Loading…</div>
+</div>
+
+<!-- ══ APP ═══════════════════════════════════════════════════════ -->
+<div id="app">
+  <header>
+    <h1><span class="dot" id="status-dot"></span> Time Tracker</h1>
+    <div class="hdr-right">
+      <span class="sync-badge" id="sync-badge" style="display:none">
+        <span class="spin-sm"></span> Syncing…
+      </span>
+      <span class="sync-badge" id="sync-ok" style="display:none;color:#0ea572">✓ Synced</span>
+      <button class="btn btn-outline btn-sm" onclick="openChangePassword()">Change Password</button>
+      <button class="btn btn-outline btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- VIEW SWITCHER -->
+    <div class="view-switcher">
+      <button class="view-btn active" id="vbtn-dashboard" onclick="switchView('dashboard')">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+        Dashboard
+      </button>
+      <button class="view-btn" id="vbtn-timeline" onclick="switchView('timeline')">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/><circle cx="5" cy="4" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="7" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>
+        IST Timeline
+      </button>
+    </div>
+
+    <!-- ══ DASHBOARD VIEW ══ -->
+    <div id="view-dashboard">
+
+    <!-- TRACKER -->
+    <div class="tracker-card">
+      <div class="section-label">Track Time</div>
+      <div id="tracker-idle">
+        <div class="tracker-form">
+          <input type="text" id="task-name" placeholder="What are you working on?" maxlength="120">
+          <button class="btn btn-green" onclick="startTask()">▶ Start</button>
+        </div>
+      </div>
+      <div id="tracker-active" style="display:none">
+        <div class="active-task">
+          <div>
+            <div class="active-name" id="active-name">—</div>
+            <div class="active-meta" id="active-start">Started —</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px">
+            <div class="timer" id="timer">00:00:00</div>
+            <button class="btn btn-danger" onclick="stopTask()">■ Stop</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FILTERS -->
+    <div class="filter-bar">
+      <div style="display:flex;gap:6px;flex-wrap:wrap" id="qf-btns">
+        <button class="qf-btn" data-range="today">Today</button>
+        <button class="qf-btn" data-range="yesterday">Yesterday</button>
+        <button class="qf-btn active" data-range="7">7 days</button>
+        <button class="qf-btn" data-range="30">30 days</button>
+        <button class="qf-btn" data-range="90">90 days</button>
+        <button class="qf-btn" data-range="all">All time</button>
+        <button class="qf-btn" data-range="custom">Custom</button>
+      </div>
+      <div id="custom-range" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="filter-group"><label>From</label><input type="date" id="filter-from"></div>
+        <div class="filter-group"><label>To</label><input type="date" id="filter-to"></div>
+        <button class="btn btn-sm" onclick="applyCustomFilter()">Apply</button>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="stats-row" id="stats-row"></div>
+
+    <!-- CHARTS -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3>Time by Task</h3>
+        <div class="chart-wrap" id="donut-wrap"><canvas id="donut-chart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Daily Hours</h3>
+        <div class="chart-wrap" id="bar-wrap"><canvas id="bar-chart"></canvas></div>
+      </div>
+      <div class="chart-card chart-full">
+        <h3>Daily Breakdown by Task (Stacked)</h3>
+        <div class="chart-wrap" style="height:280px" id="line-wrap"><canvas id="line-chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="sessions-card">
+      <div class="card-header">
+        <h3>Sessions</h3>
+        <div class="data-actions">
+          <button class="btn btn-outline btn-sm" onclick="exportBackup()">Export backup</button>
+          <label class="btn btn-outline btn-sm" style="cursor:pointer">
+            Import backup<input type="file" accept=".json" onchange="importBackup(event)" style="display:none">
+          </label>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Task</th><th>Start</th><th>End</th><th>Duration</th><th>Status</th><th></th></tr></thead>
+          <tbody id="sessions-tbody"></tbody>
+        </table>
+      </div>
+    </div><!-- end sessions-card -->
+    </div><!-- end view-dashboard -->
+
+    <!-- ══ TIMELINE VIEW ══ -->
+    <div id="view-timeline">
+      <!-- TRACKER (duplicate kept visible in timeline too) -->
+      <div class="tracker-card" id="tl-tracker-card">
+        <div class="section-label">Track Time</div>
+        <div id="tl-tracker-idle">
+          <div class="tracker-form">
+            <input type="text" id="tl-task-name" placeholder="What are you working on?" maxlength="120">
+            <button class="btn btn-green" onclick="startTaskFrom('tl')">▶ Start</button>
+          </div>
+        </div>
+        <div id="tl-tracker-active" style="display:none">
+          <div class="active-task">
+            <div>
+              <div class="active-name" id="tl-active-name">—</div>
+              <div class="active-meta" id="tl-active-start">Started —</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px">
+              <div class="timer" id="tl-timer">00:00:00</div>
+              <button class="btn btn-danger" onclick="stopTask()">■ Stop</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FILTER (date range reused) -->
+      <div class="filter-bar" id="tl-filter-bar">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="qf-btn" data-tl-range="today">Today</button>
+          <button class="qf-btn" data-tl-range="yesterday">Yesterday</button>
+          <button class="qf-btn active" data-tl-range="7">7 days</button>
+          <button class="qf-btn" data-tl-range="30">30 days</button>
+          <button class="qf-btn" data-tl-range="all">All time</button>
+        </div>
+      </div>
+
+      <div id="timeline-body"></div>
+    </div><!-- end view-timeline -->
+
+  </main>
+</div>
+
+<!-- ══ CHANGE PASSWORD MODAL ════════════════════════════════════ -->
+<div class="overlay" id="pw-modal">
+  <div class="modal">
+    <h2>Change Password</h2>
+    <p style="color:var(--muted);font-size:.82rem">This re-encrypts all your data with the new password and saves to Gist.</p>
+    <div class="input-group"><label>Current password</label><input type="password" id="cp-cur" placeholder="Current password"></div>
+    <div class="input-group"><label>New password</label><input type="password" id="cp-new" placeholder="New password (min 6 chars)"></div>
+    <div class="input-group"><label>Confirm new</label><input type="password" id="cp-cf" placeholder="Confirm new password"></div>
+    <div class="err" id="cp-err"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-sm" onclick="closePwModal()">Cancel</button>
+      <button class="btn btn-sm" onclick="saveNewPassword()">Save &amp; re-encrypt</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// CRYPTO  (Web Crypto API — AES-256-GCM + PBKDF2)
+// ══════════════════════════════════════════════════════════════════
+const PBKDF2_ITERS = 100000;
+
+function hexToBytes(hex) {
+  const a = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) a[i / 2] = parseInt(hex.slice(i, i + 2), 16);
+  return a;
+}
+function bytesToHex(buf) {
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function bytesToB64(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+function b64ToBytes(b64) {
+  return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+}
+
+async function deriveKey(password, salt) {
+  const raw = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: PBKDF2_ITERS, hash: 'SHA-256' },
+    raw, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptPayload(data, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveKey(password, salt);
+  const enc  = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(data)));
+  return { v: 1, salt: bytesToHex(salt), iv: bytesToHex(iv), data: bytesToB64(enc) };
+}
+
+async function decryptPayload(blob, password) {
+  const salt = hexToBytes(blob.salt);
+  const iv   = hexToBytes(blob.iv);
+  const key  = await deriveKey(password, salt);
+  const dec  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, b64ToBytes(blob.data));
+  return JSON.parse(new TextDecoder().decode(dec));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// LOCAL STORAGE  (only non-sensitive config + running task)
+// ══════════════════════════════════════════════════════════════════
+const LS = {
+  GIST_ID: 'tt_gist_id',
+  TOKEN:   'tt_gh_token',
+  ACTIVE:  'tt_active',      // running task (name + startTs) — not sensitive
+};
+const get  = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
+const set  = (k,v) => localStorage.setItem(k, JSON.stringify(v));
+const del  = k => localStorage.removeItem(k);
+
+// ══════════════════════════════════════════════════════════════════
+// GITHUB GIST  API
+// ══════════════════════════════════════════════════════════════════
+const GIST_FILE = 'timetracker.json';
+
+async function gistFetch(method, path, body) {
+  const token = get(LS.TOKEN);
+  const res = await fetch('https://api.github.com' + path, {
+    method,
+    headers: {
+      'Authorization': 'Bearer ' + token,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28'
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => res.status);
+    throw new Error(`GitHub API ${res.status}: ${msg}`);
+  }
+  return res.json();
+}
+
+async function readGist() {
+  const id = get(LS.GIST_ID);
+  const gist = await gistFetch('GET', `/gists/${id}`);
+  const content = gist.files[GIST_FILE]?.content;
+  if (!content) return null;
+  return JSON.parse(content);
+}
+
+async function writeGist(blob) {
+  const id = get(LS.GIST_ID);
+  await gistFetch('PATCH', `/gists/${id}`, {
+    files: { [GIST_FILE]: { content: JSON.stringify(blob, null, 2) } }
+  });
+}
+
+async function createNewGist(blob) {
+  const gist = await gistFetch('POST', '/gists', {
+    description: 'Time Tracker encrypted data',
+    public: false,
+    files: { [GIST_FILE]: { content: JSON.stringify(blob, null, 2) } }
+  });
+  return gist.id;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SESSION STATE  (in-memory after decryption)
+// ══════════════════════════════════════════════════════════════════
+let currentPassword = null;  // held in memory, never persisted
+let sessions = [];           // decrypted sessions array
+
+async function loadSessions() {
+  const blob = await readGist();
+  if (!blob) { sessions = []; return; }
+  const data = await decryptPayload(blob, currentPassword);
+  sessions = data.sessions || [];
+}
+
+async function saveSessions() {
+  showSync(true);
+  try {
+    const blob = await encryptPayload({ sessions }, currentPassword);
+    await writeGist(blob);
+    showSync(false, true);
+  } catch (e) {
+    showSync(false, false);
+    toast('Sync failed: ' + e.message, true);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SETUP FLOW
+// ══════════════════════════════════════════════════════════════════
+let setupPassword = null;
+
+function setupStep1() {
+  const p  = document.getElementById('s1-pass').value;
+  const p2 = document.getElementById('s1-pass2').value;
+  const err = document.getElementById('s1-err');
+  err.textContent = '';
+  if (p.length < 6)  { err.textContent = 'Password must be at least 6 characters'; return; }
+  if (p !== p2)       { err.textContent = 'Passwords do not match'; return; }
+  setupPassword = p;
+  document.getElementById('setup-step-1').style.display = 'none';
+  document.getElementById('setup-step-2').style.display = 'flex';
+}
+
+async function setupStep2() {
+  const token = document.getElementById('s2-token').value.trim();
+  const err   = document.getElementById('s2-err');
+  const btn   = document.querySelector('#setup-step-2 .btn-full');
+  err.textContent = '';
+  if (!token) { err.textContent = 'Paste your GitHub token'; return; }
+  btn.disabled = true; btn.textContent = 'Verifying…';
+  try {
+    set(LS.TOKEN, token);
+    const res = await fetch('https://api.github.com/user', {
+      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' }
+    });
+    if (!res.ok) throw new Error('Invalid token (status ' + res.status + ')');
+    document.getElementById('setup-step-2').style.display = 'none';
+    document.getElementById('setup-step-3').style.display = 'flex';
+  } catch (e) {
+    del(LS.TOKEN);
+    err.textContent = e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Verify token →';
+  }
+}
+
+async function createGist() {
+  const btn = document.getElementById('create-gist-btn');
+  const err = document.getElementById('s3-err');
+  err.textContent = '';
+  btn.disabled = true; btn.textContent = 'Creating…';
+  try {
+    const blob = await encryptPayload({ sessions: [] }, setupPassword);
+    const id   = await createNewGist(blob);
+    set(LS.GIST_ID, id);
+    finishSetup();
+  } catch (e) {
+    err.textContent = e.message;
+    btn.disabled = false; btn.textContent = '✦ Create new Gist';
+  }
+}
+
+async function linkGist() {
+  const id  = document.getElementById('s3-gistid').value.trim();
+  const err = document.getElementById('s3-err');
+  err.textContent = '';
+  if (!id) { err.textContent = 'Paste a Gist ID'; return; }
+  set(LS.GIST_ID, id);
+  try {
+    await readGist();
+    finishSetup();
+  } catch (e) {
+    del(LS.GIST_ID);
+    err.textContent = 'Could not read Gist: ' + e.message;
+  }
+}
+
+function finishSetup() {
+  currentPassword = setupPassword;
+  setupPassword   = null;
+  // mark setup complete by presence of GIST_ID + TOKEN
+  showScreen('screen-loading');
+  enterApp();
+}
+
+function resetSetup() {
+  if (!confirm('This removes your stored token and Gist ID from this device. Your Gist data is untouched. Continue?')) return;
+  del(LS.GIST_ID); del(LS.TOKEN); del(LS.ACTIVE);
+  location.reload();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// LOGIN
+// ══════════════════════════════════════════════════════════════════
+async function doLogin() {
+  const pass = document.getElementById('login-pass').value;
+  const err  = document.getElementById('login-err');
+  const btn  = document.getElementById('login-btn');
+  err.textContent = '';
+  if (!pass) { err.textContent = 'Enter your password'; return; }
+  btn.disabled = true; btn.textContent = 'Decrypting…';
+  showScreen('screen-loading');
+  setLoadingMsg('Fetching encrypted data…');
+  try {
+    currentPassword = pass;
+    await loadSessions();
+    enterApp();
+  } catch (e) {
+    currentPassword = null;
+    showScreen('screen-login');
+    err.textContent = e.message.includes('decryption') || e.message.includes('OperationError')
+      ? 'Wrong password — decryption failed'
+      : 'Error: ' + e.message;
+    btn.disabled = false; btn.textContent = 'Unlock & Load';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// CHANGE PASSWORD
+// ══════════════════════════════════════════════════════════════════
+function openChangePassword() { document.getElementById('pw-modal').classList.add('open'); }
+function closePwModal() {
+  document.getElementById('pw-modal').classList.remove('open');
+  ['cp-cur','cp-new','cp-cf'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('cp-err').textContent = '';
+}
+async function saveNewPassword() {
+  const cur = document.getElementById('cp-cur').value;
+  const nw  = document.getElementById('cp-new').value;
+  const cf  = document.getElementById('cp-cf').value;
+  const err = document.getElementById('cp-err');
+  err.textContent = '';
+  if (cur !== currentPassword) { err.textContent = 'Current password is wrong'; return; }
+  if (nw.length < 6) { err.textContent = 'New password must be at least 6 characters'; return; }
+  if (nw !== cf) { err.textContent = 'Passwords do not match'; return; }
+  currentPassword = nw;
+  closePwModal();
+  await saveSessions();
+  toast('Password changed — data re-encrypted');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// APP INIT
+// ══════════════════════════════════════════════════════════════════
+async function enterApp() {
+  setLoadingMsg('Decrypting sessions…');
+  if (!sessions) sessions = [];
+  showScreen(null);
+  document.getElementById('app').style.display = 'block';
+  // initialise view containers
+  document.getElementById('view-dashboard').style.display = 'flex';
+  document.getElementById('view-dashboard').style.flexDirection = 'column';
+  document.getElementById('view-dashboard').style.gap = '20px';
+  document.getElementById('view-timeline').style.display = 'none';
+  const active = get(LS.ACTIVE);
+  active ? showActiveUI(active) : showIdleUI();
+  renderDashboard();
+  setInterval(() => { if (get(LS.ACTIVE)) { renderDashboard(); if (currentView==='timeline') renderTimeline(); } }, 10000);
+}
+
+
+function logout() {
+  currentPassword = null; sessions = [];
+  clearInterval(timerInterval); timerInterval = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-pass').value = '';
+  document.getElementById('login-err').textContent = '';
+  showScreen('screen-login');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TIMER
+// ══════════════════════════════════════════════════════════════════
+let timerInterval = null;
+
+function fmtDur(ms) {
+  const s = Math.floor(ms/1000), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sc = s%60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`;
+}
+function fmtDurHuman(ms) {
+  const h = Math.floor(ms/3600000), m = Math.floor((ms%3600000)/60000);
+  if (h===0) return `${m}m`; if (m===0) return `${h}h`; return `${h}h ${m}m`;
+}
+function fmtDT(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}) + ' ' +
+         d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+}
+
+function tick() {
+  const a = get(LS.ACTIVE); if (!a) return;
+  document.getElementById('timer').textContent = fmtDur(Date.now() - a.startTs);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TRACKING
+// ══════════════════════════════════════════════════════════════════
+function startTask() {
+  startTaskFrom('main');
+}
+
+async function stopTask() {
+  const active = get(LS.ACTIVE); if (!active) return;
+  const endTs = Date.now();
+  const session = {
+    id: crypto.randomUUID(), name: active.name,
+    startISO: active.startISO, endISO: new Date(endTs).toISOString(),
+    durationMs: endTs - active.startTs
+  };
+  sessions.unshift(session);
+  del(LS.ACTIVE);
+  clearInterval(timerInterval); timerInterval = null;
+  showIdleUI();
+  renderDashboard();
+  if (currentView === 'timeline') renderTimeline();
+  toast(`Stopped: ${session.name} (${fmtDurHuman(session.durationMs)})`);
+  await saveSessions();
+}
+
+function showActiveUI(active) {
+  document.getElementById('tracker-idle').style.display = 'none';
+  document.getElementById('tracker-active').style.display = 'block';
+  document.getElementById('active-name').textContent = active.name;
+  document.getElementById('active-start').textContent = 'Started ' + fmtIST(active.startISO);
+  document.getElementById('status-dot').classList.add('active');
+  clearInterval(timerInterval); tick();
+  timerInterval = setInterval(() => { tick(); tlTick(); }, 1000);
+  syncTrackerToTimeline();
+}
+function showIdleUI() {
+  document.getElementById('tracker-idle').style.display = 'block';
+  document.getElementById('tracker-active').style.display = 'none';
+  document.getElementById('status-dot').classList.remove('active');
+  document.getElementById('timer').textContent = '00:00:00';
+  syncTrackerToTimeline();
+}
+function tlTick() {
+  const a = get(LS.ACTIVE); if (!a) return;
+  const el = document.getElementById('tl-timer');
+  if (el) el.textContent = fmtDur(Date.now() - a.startTs);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DELETE SESSION / TASK
+// ══════════════════════════════════════════════════════════════════
+async function deleteSession(id) {
+  if (!confirm('Delete this session?')) return;
+  sessions = sessions.filter(s => s.id !== id);
+  renderDashboard();
+  if (currentView === 'timeline') renderTimeline();
+  toast('Session deleted');
+  await saveSessions();
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// FILTERS
+// ══════════════════════════════════════════════════════════════════
+let filterState = { range:'7', from:null, to:null };
+
+document.querySelectorAll('.qf-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.qf-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterState.range = btn.dataset.range;
+    const cr = document.getElementById('custom-range');
+    cr.style.display = filterState.range === 'custom' ? 'flex' : 'none';
+    if (filterState.range !== 'custom') renderDashboard();
+  });
+});
+function applyCustomFilter() {
+  filterState.from = document.getElementById('filter-from').value;
+  filterState.to   = document.getElementById('filter-to').value;
+  renderDashboard();
+}
+function getFiltered() {
+  const now = new Date(); let from, to;
+  if (filterState.range === 'all') return sessions;
+  if (filterState.range === 'today') {
+    from = new Date(now); from.setHours(0,0,0,0);
+    to   = new Date(now); to.setHours(23,59,59,999);
+  } else if (filterState.range === 'yesterday') {
+    from = new Date(now); from.setDate(from.getDate() - 1); from.setHours(0,0,0,0);
+    to   = new Date(now); to.setDate(to.getDate() - 1);     to.setHours(23,59,59,999);
+  } else if (filterState.range === 'custom') {
+    if (!filterState.from && !filterState.to) return sessions;
+    from = filterState.from ? new Date(filterState.from) : null;
+    to   = filterState.to   ? new Date(filterState.to + 'T23:59:59') : null;
+  } else {
+    const days = parseInt(filterState.range);
+    from = new Date(now); from.setDate(from.getDate() - days + 1); from.setHours(0,0,0,0);
+    to   = new Date(now); to.setHours(23,59,59,999);
+  }
+  return sessions.filter(s => {
+    const d = new Date(s.startISO);
+    return (!from || d >= from) && (!to || d <= to);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════════════════════
+let donutChart, barChart, lineChart;
+const COLORS = ['#5b5ef6','#0ea572','#f59e0b','#06b6d4','#ec4899','#8b5cf6','#f97316','#10b981','#ef4444','#3b82f6'];
+
+function resetWrap(id, canvasId) {
+  const wrap = document.getElementById(id);
+  wrap.innerHTML = `<canvas id="${canvasId}"></canvas>`;
+  return document.getElementById(canvasId).getContext('2d');
+}
+function emptyWrap(id) {
+  document.getElementById(id).innerHTML = '<div class="chart-empty">No data for this period</div>';
+}
+
+function renderDashboard() {
+  const s = getFiltered();
+
+  // ── stats ──
+  const totalMs = s.reduce((acc, x) => acc + x.durationMs, 0);
+  const taskSet = new Set(s.map(x => x.name));
+  const dayMap  = {};
+  s.forEach(x => { const d = x.startISO.slice(0,10); dayMap[d] = (dayMap[d]||0) + x.durationMs; });
+  const avgMs = Object.keys(dayMap).length ? totalMs / Object.keys(dayMap).length : 0;
+  const maxSession = s.length ? s.reduce((a,b) => a.durationMs > b.durationMs ? a : b) : null;
+
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-card"><div class="lbl">Total Time</div><div class="val">${fmtDurHuman(totalMs)}</div><div class="sub">${s.length} sessions</div></div>
+    <div class="stat-card"><div class="lbl">Unique Tasks</div><div class="val">${taskSet.size}</div><div class="sub">${Object.keys(dayMap).length} active days</div></div>
+    <div class="stat-card"><div class="lbl">Avg / Day</div><div class="val">${fmtDurHuman(avgMs)}</div><div class="sub">in selected range</div></div>
+    <div class="stat-card"><div class="lbl">Longest Session</div><div class="val">${maxSession ? fmtDurHuman(maxSession.durationMs) : '—'}</div><div class="sub">${maxSession ? esc(maxSession.name) : ''}</div></div>
+  `;
+
+  // ── donut ──
+  const taskTotals = {};
+  s.forEach(x => { taskTotals[x.name] = (taskTotals[x.name]||0) + x.durationMs; });
+  const taskEntries = Object.entries(taskTotals).sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+  if (donutChart) { donutChart.destroy(); donutChart = null; }
+  if (!taskEntries.length) { emptyWrap('donut-wrap'); }
+  else {
+    const ctx = resetWrap('donut-wrap','donut-chart');
+    donutChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: taskEntries.map(([k])=>k),
+        datasets: [{ data: taskEntries.map(([,v])=>Math.round(v/60000)), backgroundColor: COLORS, borderWidth:3, borderColor:'#ffffff', hoverOffset:8 }]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false, cutout:'60%',
+        layout: { padding:{ bottom:8 } },
+        plugins: {
+          legend: {
+            position:'bottom',
+            labels: {
+              color:'#374151', boxWidth:12, padding:14, font:{size:12},
+              generateLabels: chart => chart.data.labels.map((label,i) => ({
+                text: `${label}  ${fmtDurHuman(chart.data.datasets[0].data[i]*60000)}`,
+                fillStyle: COLORS[i%COLORS.length], hidden:false, index:i,
+                fontColor: '#374151'
+              }))
+            }
+          },
+          tooltip: { callbacks: { label: ctx => {
+            const tot = ctx.dataset.data.reduce((a,b)=>a+b,0);
+            const pct = tot ? Math.round(ctx.raw/tot*100) : 0;
+            return ` ${ctx.label}: ${fmtDurHuman(ctx.raw*60000)} (${pct}%)`;
+          }}}
+        }
+      }
+    });
+  }
+
+  // ── bar (daily total, color-coded by intensity) ──
+  const sortedDays = Object.entries(dayMap).sort((a,b)=>a[0].localeCompare(b[0])).slice(-60);
+  if (barChart) { barChart.destroy(); barChart = null; }
+  if (!sortedDays.length) { emptyWrap('bar-wrap'); }
+  else {
+    const ctx = resetWrap('bar-wrap','bar-chart');
+    const barColors = sortedDays.map(([,v]) => {
+      const h = v/3600000;
+      if (h>=6) return '#0ea572'; if (h>=3) return '#5b5ef6'; if (h>=1) return '#8b5cf6'; return '#d1d5db';
+    });
+    barChart = new Chart(ctx, {
+      type:'bar',
+      data: {
+        labels: sortedDays.map(([d]) => new Date(d+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})),
+        datasets: [{ label:'Hours', data: sortedDays.map(([,v])=>+(v/3600000).toFixed(2)), backgroundColor:barColors, borderRadius:5, borderSkipped:false }]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins: {
+          legend:{display:false},
+          tooltip:{callbacks:{label: ctx => ` ${fmtDurHuman(ctx.raw*3600000)}`}}
+        },
+        scales: {
+          x:{ ticks:{color:'#6b7280',font:{size:11},maxRotation:45}, grid:{color:'rgba(0,0,0,.06)'}, border:{color:'rgba(0,0,0,.08)'} },
+          y:{ ticks:{color:'#6b7280',font:{size:11},callback:v=>v===0?'0':v+'h'}, grid:{color:'rgba(0,0,0,.06)'}, border:{color:'rgba(0,0,0,.08)'}, beginAtZero:true }
+        }
+      }
+    });
+  }
+
+  // ── stacked bar: daily hours per task ──
+  const allDays = Object.keys(dayMap).sort().slice(-30);
+  const taskDayMap = {};
+  s.forEach(x => { const d=x.startISO.slice(0,10); if (!taskDayMap[x.name]) taskDayMap[x.name]={}; taskDayMap[x.name][d]=(taskDayMap[x.name][d]||0)+x.durationMs; });
+  if (lineChart) { lineChart.destroy(); lineChart = null; }
+  if (!allDays.length || !taskEntries.length) { emptyWrap('line-wrap'); }
+  else {
+    const ctx = resetWrap('line-wrap','line-chart');
+    const datasets = taskEntries.map(([name],i) => ({
+      label: name,
+      data: allDays.map(d => +((taskDayMap[name]?.[d]||0)/3600000).toFixed(2)),
+      backgroundColor: COLORS[i%COLORS.length],
+      borderColor: COLORS[i%COLORS.length],
+      borderWidth: 0,
+      borderRadius: i === taskEntries.length-1 ? 4 : 0,
+      borderSkipped: false,
+      stack: 'tasks'
+    }));
+    lineChart = new Chart(ctx, {
+      type:'bar',
+      data: {
+        labels: allDays.map(d => new Date(d+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})),
+        datasets
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        plugins: {
+          legend:{ position:'bottom', labels:{color:'#374151',boxWidth:12,padding:14,font:{size:12}} },
+          tooltip:{
+            callbacks:{
+              label: ctx => ctx.raw>0 ? ` ${ctx.dataset.label}: ${fmtDurHuman(ctx.raw*3600000)}` : null,
+              filter: item => item.raw>0
+            }
+          }
+        },
+        scales: {
+          x:{ stacked:true, ticks:{color:'#6b7280',font:{size:11},maxRotation:45}, grid:{color:'rgba(0,0,0,.06)'}, border:{color:'rgba(0,0,0,.08)'} },
+          y:{ stacked:true, ticks:{color:'#6b7280',font:{size:11},callback:v=>v===0?'0':v+'h'}, grid:{color:'rgba(0,0,0,.06)'}, border:{color:'rgba(0,0,0,.08)'}, beginAtZero:true }
+        }
+      }
+    });
+  }
+
+  // ── table ──
+  const tbody = document.getElementById('sessions-tbody');
+  const active = get(LS.ACTIVE);
+  const rows = active
+    ? [{ id:'__active__', name:active.name, startISO:active.startISO, endISO:null, durationMs:Date.now()-active.startTs }, ...s]
+    : s;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No sessions yet. Start tracking!</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td><strong>${esc(r.name)}</strong></td>
+      <td>${fmtDT(r.startISO)}</td>
+      <td>${r.endISO ? fmtDT(r.endISO) : '—'}</td>
+      <td>${fmtDurHuman(r.durationMs)}</td>
+      <td>${r.endISO ? '<span class="tag tag-done">Done</span>' : '<span class="tag tag-running">Running</span>'}</td>
+      <td>${r.id!=='__active__' ? `<button class="del-btn" onclick="deleteSession('${r.id}')" title="Delete">✕</button>` : ''}</td>
+    </tr>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// EXPORT / IMPORT  (plain decrypted backup — for emergency)
+// ══════════════════════════════════════════════════════════════════
+function exportBackup() {
+  const blob = new Blob([JSON.stringify({sessions, exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='timetracker_backup.json'; a.click();
+  URL.revokeObjectURL(url);
+  toast('Backup exported (unencrypted — keep it safe)');
+}
+function importBackup(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!Array.isArray(data.sessions)) throw new Error('Invalid format');
+      if (!confirm(`Merge ${data.sessions.length} sessions from backup?`)) return;
+      const existingIds = new Set(sessions.map(s=>s.id));
+      const fresh = data.sessions.filter(s=>!existingIds.has(s.id));
+      sessions = [...sessions, ...fresh].sort((a,b)=>b.startISO.localeCompare(a.startISO));
+      renderDashboard();
+      await saveSessions();
+      toast(`Imported ${fresh.length} new sessions`);
+    } catch { toast('Import failed: invalid file', true); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// UI HELPERS
+// ══════════════════════════════════════════════════════════════════
+function esc(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  if (id) document.getElementById(id).classList.add('active');
+}
+function setLoadingMsg(msg) { document.getElementById('loading-msg').textContent = msg; }
+
+let syncTimer;
+function showSync(syncing, ok) {
+  const badge = document.getElementById('sync-badge');
+  const okBadge = document.getElementById('sync-ok');
+  if (syncing) { badge.style.display='flex'; okBadge.style.display='none'; clearTimeout(syncTimer); }
+  else { badge.style.display='none'; if (ok !== undefined) { okBadge.style.display='flex'; clearTimeout(syncTimer); syncTimer = setTimeout(()=>okBadge.style.display='none', 3000); } }
+}
+
+let toastTimer;
+function toast(msg, isErr=false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = isErr ? 'show err-toast' : 'show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3000);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// VIEW SWITCHING
+// ══════════════════════════════════════════════════════════════════
+let currentView = 'dashboard';
+
+function switchView(v) {
+  currentView = v;
+  document.getElementById('view-dashboard').style.display = v === 'dashboard' ? 'flex' : 'none';
+  document.getElementById('view-dashboard').style.flexDirection = 'column';
+  document.getElementById('view-dashboard').style.gap = '20px';
+  document.getElementById('view-timeline').style.display = v === 'timeline' ? 'flex' : 'none';
+  document.getElementById('view-timeline').style.flexDirection = 'column';
+  document.getElementById('view-timeline').style.gap = '16px';
+  document.getElementById('vbtn-dashboard').classList.toggle('active', v === 'dashboard');
+  document.getElementById('vbtn-timeline').classList.toggle('active', v === 'timeline');
+  if (v === 'timeline') {
+    syncTrackerToTimeline();
+    renderTimeline();
+  }
+}
+
+// Keep timeline tracker in sync with dashboard tracker state
+function syncTrackerToTimeline() {
+  const active = get(LS.ACTIVE);
+  if (active) {
+    document.getElementById('tl-tracker-idle').style.display = 'none';
+    document.getElementById('tl-tracker-active').style.display = 'block';
+    document.getElementById('tl-active-name').textContent = active.name;
+    document.getElementById('tl-active-start').textContent = 'Started ' + fmtIST(active.startISO);
+  } else {
+    document.getElementById('tl-tracker-idle').style.display = 'block';
+    document.getElementById('tl-tracker-active').style.display = 'none';
+  }
+}
+
+function startTaskFrom(src) {
+  const inp = document.getElementById(src === 'tl' ? 'tl-task-name' : 'task-name');
+  const name = inp.value.trim().toLowerCase();
+  if (!name) { toast('Enter a task name first'); return; }
+  const active = { name, startTs: Date.now(), startISO: new Date().toISOString() };
+  set(LS.ACTIVE, active);
+  inp.value = '';
+  showActiveUI(active);
+  renderDashboard();
+  if (currentView === 'timeline') renderTimeline();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// IST FORMATTING
+// ══════════════════════════════════════════════════════════════════
+function fmtIST(iso) {
+  return new Date(iso).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true
+  });
+}
+function fmtISTTime(iso) {
+  return new Date(iso).toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit', minute: '2-digit', hour12: true
+  });
+}
+function fmtISTDate(iso) {
+  return new Date(iso).toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    weekday: 'long', day: 'numeric', month: 'long'
+  });
+}
+function getISTDateKey(iso) {
+  // Returns YYYY-MM-DD in IST for grouping
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TIMELINE FILTER
+// ══════════════════════════════════════════════════════════════════
+let tlFilterRange = '7';
+
+document.querySelectorAll('[data-tl-range]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-tl-range]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    tlFilterRange = btn.dataset.tlRange;
+    renderTimeline();
+  });
+});
+
+function getTLFiltered() {
+  const now = new Date();
+  if (tlFilterRange === 'all') return sessions;
+  let from, to;
+  if (tlFilterRange === 'today') {
+    from = new Date(now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30');
+    to   = new Date(now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T23:59:59+05:30');
+  } else if (tlFilterRange === 'yesterday') {
+    const yIST = new Date(now); yIST.setDate(yIST.getDate() - 1);
+    const yKey = yIST.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    from = new Date(yKey + 'T00:00:00+05:30');
+    to   = new Date(yKey + 'T23:59:59+05:30');
+  } else {
+    const days = parseInt(tlFilterRange);
+    from = new Date(now); from.setDate(from.getDate() - days + 1); from.setHours(0,0,0,0);
+    to   = new Date(now); to.setHours(23,59,59,999);
+  }
+  return sessions.filter(s => { const d = new Date(s.startISO); return d >= from && d <= to; });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TIMELINE RENDERER
+// ══════════════════════════════════════════════════════════════════
+function renderTimeline() {
+  const s = getTLFiltered();
+  const active = get(LS.ACTIVE);
+
+  // Build rows including active
+  const allRows = active
+    ? [{ id:'__active__', name:active.name, startISO:active.startISO, endISO:null, durationMs:Date.now()-active.startTs }, ...s]
+    : [...s];
+
+  // Group by IST date
+  const groups = {};
+  allRows.forEach(r => {
+    const key = getISTDateKey(r.startISO);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  });
+
+  const sortedKeys = Object.keys(groups).sort((a,b) => b.localeCompare(a));
+
+  const body = document.getElementById('timeline-body');
+  if (!sortedKeys.length) {
+    body.innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted)">No sessions in this range.</div>';
+    return;
+  }
+
+  body.innerHTML = sortedKeys.map(key => {
+    const rows = groups[key].sort((a,b) => b.startISO.localeCompare(a.startISO));
+    const dayTotalMs = rows.reduce((sum, r) => sum + r.durationMs, 0);
+    // find max duration in this day for bar scaling
+    const maxMs = Math.max(...rows.map(r => r.durationMs), 1);
+
+    const rowsHtml = rows.map((r, idx) => {
+      const color = COLORS[idx % COLORS.length];
+      const barPct = Math.round(r.durationMs / maxMs * 100);
+      const isRunning = r.id === '__active__';
+      return `
+        <div class="tl-row">
+          <div class="tl-time">
+            <div class="tl-start">${isRunning ? '<span class="tl-running-dot"></span>' : ''}${fmtISTTime(r.startISO)}</div>
+            <div class="tl-end">${isRunning ? 'running…' : '→ ' + fmtISTTime(r.endISO)}</div>
+          </div>
+          <div>
+            <div class="tl-name">${esc(r.name)}</div>
+            <div class="tl-bar-wrap" style="margin-top:6px">
+              <div class="tl-bar" style="width:${barPct}%;background:${color}"></div>
+            </div>
+          </div>
+          <div class="tl-dur">${fmtDurHuman(r.durationMs)}</div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="tl-day-group">
+        <div class="tl-day-header">
+          <div class="tl-day-label">${fmtISTDate(key + 'T12:00:00')}</div>
+          <div class="tl-day-total">${fmtDurHuman(dayTotalMs)} total</div>
+          <div class="tl-day-line"></div>
+        </div>
+        <div class="tl-sessions">${rowsHtml}</div>
+      </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ══════════════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (document.getElementById('app').style.display === 'none') return;
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 's' || e.key === 'S') { get(LS.ACTIVE) ? stopTask() : document.getElementById('task-name').focus(); }
+});
+document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+
+// ══════════════════════════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════════════════════════
+(function boot() {
+  const hasToken = !!get(LS.TOKEN);
+  const hasGist  = !!get(LS.GIST_ID);
+  if (hasToken && hasGist) showScreen('screen-login');
+  else showScreen('screen-setup');
+})();
+</script>
+</body>
+</html>
