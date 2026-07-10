@@ -204,92 +204,25 @@ tbody td strong{color:var(--text);font-weight:600}
 
 <!-- ══ SETUP SCREEN ══════════════════════════════════════════════ -->
 <div id="screen-setup" class="screen active">
-
-  <!-- CHOOSE PATH -->
-  <div class="card" id="setup-choose">
+  <div class="card">
     <h1>⏱ Time Tracker</h1>
-    <p>Is this your first time, or are you connecting an existing account on a new device?</p>
-    <button class="btn btn-full btn-green" onclick="choosePath('new')">✦ First time — create my account</button>
-    <button class="btn btn-full btn-outline" onclick="choosePath('existing')">↩ I have an account — new device</button>
-  </div>
-
-  <!-- ── PATH A: FIRST TIME (3 steps) ── -->
-  <div class="card" id="setup-step-1" style="display:none">
-    <h1>⏱ Time Tracker</h1>
-    <p style="color:var(--muted);font-size:.8rem;text-align:center">Step 1 of 3 — Set your password</p>
-    <div class="steps"><div class="step active"></div><div class="step"></div><div class="step"></div></div>
-    <div class="input-group">
-      <label>Choose a password</label>
-      <input type="password" id="s1-pass" placeholder="Min 6 characters" autocomplete="new-password">
-    </div>
-    <div class="input-group">
-      <label>Confirm password</label>
-      <input type="password" id="s1-pass2" placeholder="Repeat password">
-    </div>
-    <p class="helper">Your password <strong>never</strong> leaves your device. Data is encrypted with AES-256 — even if someone sees your Gist, they see only random bytes.</p>
-    <div class="err" id="s1-err"></div>
-    <button class="btn btn-full" onclick="setupStep1()">Continue →</button>
-    <p class="screen-sub"><a href="#" onclick="choosePath(null);return false;">← Back</a></p>
-  </div>
-
-  <div class="card" id="setup-step-2" style="display:none">
-    <h1>⏱ Time Tracker</h1>
-    <p style="color:var(--muted);font-size:.8rem;text-align:center">Step 2 of 3 — GitHub token</p>
-    <div class="steps"><div class="step done"></div><div class="step active"></div><div class="step"></div></div>
-    <p class="helper">
-      Your encrypted data is stored in a GitHub Gist. Paste a Personal Access Token with <strong>gist</strong> scope.<br><br>
-      <a href="https://github.com/settings/tokens/new?scopes=gist&description=TimeTracker" target="_blank" rel="noopener">→ Create token on GitHub</a>
-    </p>
+    <p>Enter your credentials to connect</p>
     <div class="input-group">
       <label>GitHub Personal Access Token</label>
-      <input type="password" id="s2-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
-    </div>
-    <div class="err" id="s2-err"></div>
-    <button class="btn btn-full" onclick="setupStep2()">Verify token →</button>
-  </div>
-
-  <div class="card" id="setup-step-3" style="display:none">
-    <h1>⏱ Time Tracker</h1>
-    <p style="color:var(--muted);font-size:.8rem;text-align:center">Step 3 of 3 — Create your data store</p>
-    <div class="steps"><div class="step done"></div><div class="step done"></div><div class="step active"></div></div>
-    <p class="helper">This creates a private encrypted Gist on your GitHub account to store all your time tracking data.</p>
-    <button class="btn btn-full btn-green" onclick="createGist()" id="create-gist-btn">✦ Create my data store</button>
-    <div class="err" id="s3-err"></div>
-  </div>
-
-  <!-- ── PATH B: EXISTING ACCOUNT, NEW DEVICE (2 steps) ── -->
-  <div class="card" id="setup-existing-1" style="display:none">
-    <h1>⏱ Time Tracker</h1>
-    <p style="color:var(--muted);font-size:.8rem;text-align:center">New device setup — Step 1 of 2</p>
-    <div class="steps"><div class="step active"></div><div class="step"></div></div>
-    <p class="helper">Paste your GitHub token and Gist ID to connect this device to your existing data.</p>
-    <div class="input-group">
-      <label>GitHub Personal Access Token</label>
-      <input type="password" id="ex-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+      <input type="password" id="s-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+      <span class="helper" style="margin-top:2px"><a href="https://github.com/settings/tokens/new?scopes=gist&description=TimeTracker" target="_blank" rel="noopener">→ Create token</a> (needs <strong>gist</strong> scope)</span>
     </div>
     <div class="input-group">
-      <label>Gist ID</label>
-      <input type="text" id="ex-gistid" placeholder="e.g. a1b2c3d4e5f6...">
-      <span class="helper" style="margin-top:2px">Find it at <a href="https://gist.github.com" target="_blank" rel="noopener">gist.github.com</a> → your Gist → copy the ID from the URL</span>
+      <label>Gist ID <span style="font-weight:400;text-transform:none;letter-spacing:0">(leave empty on very first setup)</span></label>
+      <input type="text" id="s-gistid" placeholder="e.g. a1b2c3d4e5f6… (find at gist.github.com)">
     </div>
-    <div class="err" id="ex-err"></div>
-    <button class="btn btn-full" onclick="existingStep1()" id="ex-btn1">Connect →</button>
-    <p class="screen-sub"><a href="#" onclick="choosePath(null);return false;">← Back</a></p>
-  </div>
-
-  <div class="card" id="setup-existing-2" style="display:none">
-    <h1>⏱ Time Tracker</h1>
-    <p style="color:var(--muted);font-size:.8rem;text-align:center">New device setup — Step 2 of 2</p>
-    <div class="steps"><div class="step done"></div><div class="step active"></div></div>
-    <p class="helper">Enter the password you set when you first created this account. This decrypts your existing data.</p>
     <div class="input-group">
-      <label>Your password</label>
-      <input type="password" id="ex-pass" placeholder="Your encryption password" autocomplete="current-password">
+      <label>Password</label>
+      <input type="password" id="s-pass" placeholder="Your encryption password" autocomplete="current-password">
     </div>
-    <div class="err" id="ex-pass-err"></div>
-    <button class="btn btn-full" onclick="existingStep2()" id="ex-btn2">Unlock &amp; Load →</button>
+    <div class="err" id="s-err"></div>
+    <button class="btn btn-full" onclick="doSetup()" id="s-btn">Connect →</button>
   </div>
-
 </div>
 
 <!-- ══ LOGIN SCREEN ══════════════════════════════════════════════ -->
@@ -616,129 +549,51 @@ async function saveSessions() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// SETUP FLOW
+// SETUP FLOW  (one form — first time and every new device)
 // ══════════════════════════════════════════════════════════════════
-let setupPassword = null;
-
-function showOnly(id) {
-  ['setup-choose','setup-step-1','setup-step-2','setup-step-3',
-   'setup-existing-1','setup-existing-2'].forEach(s => {
-    const el = document.getElementById(s);
-    if (el) el.style.display = el.id === id ? 'flex' : 'none';
-  });
-}
-
-function choosePath(path) {
-  if (!path) { showOnly('setup-choose'); return; }
-  if (path === 'new')      showOnly('setup-step-1');
-  if (path === 'existing') showOnly('setup-existing-1');
-}
-
-// ── PATH A: FIRST TIME ──
-function setupStep1() {
-  const p  = document.getElementById('s1-pass').value;
-  const p2 = document.getElementById('s1-pass2').value;
-  const err = document.getElementById('s1-err');
-  err.textContent = '';
-  if (p.length < 6) { err.textContent = 'Password must be at least 6 characters'; return; }
-  if (p !== p2)      { err.textContent = 'Passwords do not match'; return; }
-  setupPassword = p;
-  showOnly('setup-step-2');
-}
-
-async function setupStep2() {
-  const token = document.getElementById('s2-token').value.trim();
-  const err   = document.getElementById('s2-err');
-  const btn   = document.querySelector('#setup-step-2 .btn-full');
+async function doSetup() {
+  const token  = document.getElementById('s-token').value.trim();
+  const gistId = document.getElementById('s-gistid').value.trim();
+  const pass   = document.getElementById('s-pass').value;
+  const err    = document.getElementById('s-err');
+  const btn    = document.getElementById('s-btn');
   err.textContent = '';
   if (!token) { err.textContent = 'Paste your GitHub token'; return; }
-  btn.disabled = true; btn.textContent = 'Verifying…';
-  try {
-    set(LS.TOKEN, token);
-    const res = await fetch('https://api.github.com/user', {
-      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' }
-    });
-    if (!res.ok) throw new Error('Invalid token (status ' + res.status + ')');
-    showOnly('setup-step-3');
-  } catch (e) {
-    del(LS.TOKEN);
-    err.textContent = e.message;
-  } finally {
-    btn.disabled = false; btn.textContent = 'Verify token →';
-  }
-}
+  if (!pass)  { err.textContent = 'Enter your password'; return; }
+  if (pass.length < 6) { err.textContent = 'Password must be at least 6 characters'; return; }
 
-async function createGist() {
-  const btn = document.getElementById('create-gist-btn');
-  const err = document.getElementById('s3-err');
-  err.textContent = '';
-  btn.disabled = true; btn.textContent = 'Creating…';
-  try {
-    const blob = await encryptPayload({ sessions: [] }, setupPassword);
-    const id   = await createNewGist(blob);
-    set(LS.GIST_ID, id);
-    finishSetup();
-  } catch (e) {
-    err.textContent = e.message;
-    btn.disabled = false; btn.textContent = '✦ Create my data store';
-  }
-}
-
-// ── PATH B: EXISTING ACCOUNT, NEW DEVICE ──
-async function existingStep1() {
-  const token  = document.getElementById('ex-token').value.trim();
-  const gistId = document.getElementById('ex-gistid').value.trim();
-  const err    = document.getElementById('ex-err');
-  const btn    = document.getElementById('ex-btn1');
-  err.textContent = '';
-  if (!token)  { err.textContent = 'Paste your GitHub token'; return; }
-  if (!gistId) { err.textContent = 'Paste your Gist ID'; return; }
   btn.disabled = true; btn.textContent = 'Connecting…';
+  showScreen('screen-loading');
+  setLoadingMsg('Verifying token…');
+
   try {
-    set(LS.TOKEN, token);
-    set(LS.GIST_ID, gistId);
-    // verify token + gist are reachable before proceeding
     const res = await fetch('https://api.github.com/user', {
       headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' }
     });
-    if (!res.ok) throw new Error('Invalid token');
-    await readGist(); // will throw if gist ID wrong
-    showOnly('setup-existing-2');
-  } catch (e) {
-    del(LS.TOKEN); del(LS.GIST_ID);
-    err.textContent = e.message.includes('404') ? 'Gist not found — check the ID' : e.message;
-  } finally {
-    btn.disabled = false; btn.textContent = 'Connect →';
-  }
-}
-
-async function existingStep2() {
-  const pass = document.getElementById('ex-pass').value;
-  const err  = document.getElementById('ex-pass-err');
-  const btn  = document.getElementById('ex-btn2');
-  err.textContent = '';
-  if (!pass) { err.textContent = 'Enter your password'; return; }
-  btn.disabled = true; btn.textContent = 'Decrypting…';
-  showScreen('screen-loading');
-  setLoadingMsg('Fetching and decrypting your data…');
-  try {
+    if (!res.ok) throw new Error('Invalid GitHub token');
+    set(LS.TOKEN, token);
     currentPassword = pass;
-    await loadSessions();
-    finishSetup();
+
+    if (gistId) {
+      set(LS.GIST_ID, gistId);
+      setLoadingMsg('Fetching and decrypting your data…');
+      await loadSessions();
+    } else {
+      setLoadingMsg('Creating your encrypted data store…');
+      const blob = await encryptPayload({ sessions: [] }, pass);
+      const id   = await createNewGist(blob);
+      set(LS.GIST_ID, id);
+      sessions = [];
+    }
+
+    enterApp();
   } catch (e) {
     currentPassword = null;
+    del(LS.TOKEN); del(LS.GIST_ID);
     showScreen('screen-setup');
-    showOnly('setup-existing-2');
     err.textContent = e.message.includes('OperationError') ? 'Wrong password — decryption failed' : e.message;
-    btn.disabled = false; btn.textContent = 'Unlock & Load →';
+    btn.disabled = false; btn.textContent = 'Connect →';
   }
-}
-
-function finishSetup() {
-  if (!currentPassword) currentPassword = setupPassword;
-  setupPassword = null;
-  showScreen('screen-loading');
-  enterApp();
 }
 
 function resetSetup() {
@@ -1365,6 +1220,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 's' || e.key === 'S') { get(LS.ACTIVE) ? stopTask() : document.getElementById('task-name').focus(); }
 });
 document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+document.getElementById('s-pass').addEventListener('keydown', e => { if (e.key==='Enter') doSetup(); });
 
 // ══════════════════════════════════════════════════════════════════
 // BOOT
