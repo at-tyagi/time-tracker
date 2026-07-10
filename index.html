@@ -539,25 +539,26 @@ async function createNewGist(blob) {
 // ══════════════════════════════════════════════════════════════════
 let currentPassword = null;
 let sessions = [];
+let activeTask = null; // in-memory, synced to Gist
 
-async function loadSessions() {
+async function loadFromGist() {
   const blob = await readGist();
-  if (!blob) { sessions = []; return; }
+  if (!blob) { sessions = []; activeTask = null; return; }
   const data = await decryptPayload(blob, currentPassword);
-  sessions = data.sessions || [];
-  // decrypt and cache the token in localStorage so writes work
+  sessions   = data.sessions   || [];
+  activeTask = data.active     || null;
   if (data.encToken) {
     const token = await decryptPayload(data.encToken, currentPassword).catch(() => null);
     if (token) set(LS.TOKEN, token);
   }
 }
 
-async function saveSessions() {
+async function saveToGist() {
   showSync(true);
   try {
-    const token = get(LS.TOKEN);
+    const token    = get(LS.TOKEN);
     const encToken = token ? await encryptPayload(token, currentPassword) : null;
-    const blob = await encryptPayload({ sessions, encToken }, currentPassword);
+    const blob     = await encryptPayload({ sessions, active: activeTask, encToken }, currentPassword);
     await writeGist(blob);
     showSync(false, true);
   } catch (e) {
@@ -565,6 +566,10 @@ async function saveSessions() {
     toast('Sync failed: ' + e.message, true);
   }
 }
+
+// keep old name as alias so nothing else breaks
+const loadSessions = loadFromGist;
+const saveSessions = saveToGist;
 
 // ══════════════════════════════════════════════════════════════════
 // SETUP FLOW  (one form — first time and every new device)
@@ -619,7 +624,7 @@ async function doSetup() {
 
 function resetSetup() {
   if (!confirm('This removes your stored token and Gist ID from this device. Your Gist data is untouched. Continue?')) return;
-  del(LS.GIST_ID); del(LS.TOKEN); del(LS.ACTIVE);
+  del(LS.GIST_ID); del(LS.TOKEN);
   location.reload();
 }
 
@@ -686,15 +691,14 @@ async function enterApp() {
   document.getElementById('view-dashboard').style.flexDirection = 'column';
   document.getElementById('view-dashboard').style.gap = '20px';
   document.getElementById('view-timeline').style.display = 'none';
-const active = get(LS.ACTIVE);
-  active ? showActiveUI(active) : showIdleUI();
+  activeTask ? showActiveUI(activeTask) : showIdleUI();
   renderDashboard();
-  setInterval(() => { if (get(LS.ACTIVE)) { renderDashboard(); if (currentView==='timeline') renderTimeline(); } }, 10000);
+  setInterval(() => { if (activeTask) { renderDashboard(); if (currentView==='timeline') renderTimeline(); } }, 10000);
 }
 
 
 function logout() {
-  currentPassword = null; sessions = [];
+  currentPassword = null; sessions = []; activeTask = null;
   clearInterval(timerInterval); timerInterval = null;
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-pass').value = '';
@@ -722,8 +726,8 @@ function fmtDT(iso) {
 }
 
 function tick() {
-  const a = get(LS.ACTIVE); if (!a) return;
-  document.getElementById('timer').textContent = fmtDur(Date.now() - a.startTs);
+  if (!activeTask) return;
+  document.getElementById('timer').textContent = fmtDur(Date.now() - activeTask.startTs);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -734,21 +738,21 @@ function startTask() {
 }
 
 async function stopTask() {
-  const active = get(LS.ACTIVE); if (!active) return;
+  if (!activeTask) return;
   const endTs = Date.now();
   const session = {
-    id: crypto.randomUUID(), name: active.name,
-    startISO: active.startISO, endISO: new Date(endTs).toISOString(),
-    durationMs: endTs - active.startTs
+    id: crypto.randomUUID(), name: activeTask.name,
+    startISO: activeTask.startISO, endISO: new Date(endTs).toISOString(),
+    durationMs: endTs - activeTask.startTs
   };
   sessions.unshift(session);
-  del(LS.ACTIVE);
+  activeTask = null;
   clearInterval(timerInterval); timerInterval = null;
   showIdleUI();
   renderDashboard();
   if (currentView === 'timeline') renderTimeline();
   toast(`Stopped: ${session.name} (${fmtDurHuman(session.durationMs)})`);
-  await saveSessions();
+  await saveToGist();
 }
 
 function showActiveUI(active) {
@@ -769,9 +773,9 @@ function showIdleUI() {
   syncTrackerToTimeline();
 }
 function tlTick() {
-  const a = get(LS.ACTIVE); if (!a) return;
+  if (!activeTask) return;
   const el = document.getElementById('tl-timer');
-  if (el) el.textContent = fmtDur(Date.now() - a.startTs);
+  if (el) el.textContent = fmtDur(Date.now() - activeTask.startTs);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -980,9 +984,8 @@ function renderDashboard() {
 
   // ── table ──
   const tbody = document.getElementById('sessions-tbody');
-  const active = get(LS.ACTIVE);
-  const rows = active
-    ? [{ id:'__active__', name:active.name, startISO:active.startISO, endISO:null, durationMs:Date.now()-active.startTs }, ...s]
+  const rows = activeTask
+    ? [{ id:'__active__', name:activeTask.name, startISO:activeTask.startISO, endISO:null, durationMs:Date.now()-activeTask.startTs }, ...s]
     : s;
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No sessions yet. Start tracking!</div></td></tr>`;
@@ -1081,7 +1084,7 @@ function switchView(v) {
 
 // Keep timeline tracker in sync with dashboard tracker state
 function syncTrackerToTimeline() {
-  const active = get(LS.ACTIVE);
+  const active = activeTask;
   if (active) {
     document.getElementById('tl-tracker-idle').style.display = 'none';
     document.getElementById('tl-tracker-active').style.display = 'block';
@@ -1093,16 +1096,16 @@ function syncTrackerToTimeline() {
   }
 }
 
-function startTaskFrom(src) {
+async function startTaskFrom(src) {
   const inp = document.getElementById(src === 'tl' ? 'tl-task-name' : 'task-name');
   const name = inp.value.trim().toLowerCase();
   if (!name) { toast('Enter a task name first'); return; }
-  const active = { name, startTs: Date.now(), startISO: new Date().toISOString() };
-  set(LS.ACTIVE, active);
+  activeTask = { name, startTs: Date.now(), startISO: new Date().toISOString() };
   inp.value = '';
-  showActiveUI(active);
+  showActiveUI(activeTask);
   renderDashboard();
   if (currentView === 'timeline') renderTimeline();
+  await saveToGist();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1171,11 +1174,9 @@ function getTLFiltered() {
 // ══════════════════════════════════════════════════════════════════
 function renderTimeline() {
   const s = getTLFiltered();
-  const active = get(LS.ACTIVE);
-
   // Build rows including active
-  const allRows = active
-    ? [{ id:'__active__', name:active.name, startISO:active.startISO, endISO:null, durationMs:Date.now()-active.startTs }, ...s]
+  const allRows = activeTask
+    ? [{ id:'__active__', name:activeTask.name, startISO:activeTask.startISO, endISO:null, durationMs:Date.now()-activeTask.startTs }, ...s]
     : [...s];
 
   // Group by IST date
@@ -1238,7 +1239,7 @@ function renderTimeline() {
 document.addEventListener('keydown', e => {
   if (document.getElementById('app').style.display === 'none') return;
   if (e.target.tagName === 'INPUT') return;
-  if (e.key === 's' || e.key === 'S') { get(LS.ACTIVE) ? stopTask() : document.getElementById('task-name').focus(); }
+  if (e.key === 's' || e.key === 'S') { activeTask ? stopTask() : document.getElementById('task-name').focus(); }
 });
 document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
 document.getElementById('s-pass').addEventListener('keydown', e => { if (e.key==='Enter') doSetup(); });
