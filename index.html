@@ -550,7 +550,7 @@ async function loadFromGist() {
   // Auto-stop task if no heartbeat for 2 hours (device was closed without stopping)
   if (activeTask) {
     const lastBeat = activeTask.heartbeat || activeTask.startTs;
-    if (Date.now() - lastBeat > 2 * 60 * 60 * 1000) {
+    if (Date.now() - lastBeat > 24 * 60 * 60 * 1000) {
       const endTs = lastBeat; // end at last known heartbeat, not now
       sessions.unshift({
         id: crypto.randomUUID(), name: activeTask.name,
