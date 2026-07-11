@@ -893,7 +893,7 @@ function renderDashboard() {
   const totalMs = s.reduce((acc, x) => acc + x.durationMs, 0);
   const taskSet = new Set(s.map(x => x.name));
   const dayMap  = {};
-  s.forEach(x => { const d = x.startISO.slice(0,10); dayMap[d] = (dayMap[d]||0) + x.durationMs; });
+  s.forEach(x => { const d = getISTDateKey(x.startISO); dayMap[d] = (dayMap[d]||0) + x.durationMs; });
   const avgMs = Object.keys(dayMap).length ? totalMs / Object.keys(dayMap).length : 0;
   const maxSession = s.length ? s.reduce((a,b) => a.durationMs > b.durationMs ? a : b) : null;
 
@@ -977,7 +977,7 @@ function renderDashboard() {
   // ── stacked bar: daily hours per task ──
   const allDays = Object.keys(dayMap).sort().slice(-30);
   const taskDayMap = {};
-  s.forEach(x => { const d=x.startISO.slice(0,10); if (!taskDayMap[x.name]) taskDayMap[x.name]={}; taskDayMap[x.name][d]=(taskDayMap[x.name][d]||0)+x.durationMs; });
+  s.forEach(x => { const d=getISTDateKey(x.startISO); if (!taskDayMap[x.name]) taskDayMap[x.name]={}; taskDayMap[x.name][d]=(taskDayMap[x.name][d]||0)+x.durationMs; });
   if (lineChart) { lineChart.destroy(); lineChart = null; }
   if (!allDays.length || !taskEntries.length) { emptyWrap('line-wrap'); }
   else {
