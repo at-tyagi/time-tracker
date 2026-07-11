@@ -865,13 +865,36 @@ async function deleteSession(id) {
 // ══════════════════════════════════════════════════════════════════
 // FILTERS
 // ══════════════════════════════════════════════════════════════════
-let filterState = { range:'7', from:null, to:null, weekdays: new Set() };
+let filterState = { range:'7', from:null, to:null, weekdays: new Set([0,1,2,3,4,5,6]) };
+
+// Mark all weekday buttons active on load
+document.querySelectorAll('.wd-btn').forEach(btn => btn.classList.add('active'));
 
 document.querySelectorAll('.wd-btn').forEach(btn => {
+  let clickTimer = null;
   btn.addEventListener('click', () => {
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => {
+      // single click: toggle this day
+      const wd = parseInt(btn.dataset.wd);
+      if (filterState.weekdays.has(wd)) {
+        filterState.weekdays.delete(wd);
+        btn.classList.remove('active');
+      } else {
+        filterState.weekdays.add(wd);
+        btn.classList.add('active');
+      }
+      renderDashboard();
+    }, 220);
+  });
+  btn.addEventListener('dblclick', () => {
+    clearTimeout(clickTimer);
+    // double click: isolate — deselect all others, select only this one
     const wd = parseInt(btn.dataset.wd);
-    if (filterState.weekdays.has(wd)) { filterState.weekdays.delete(wd); btn.classList.remove('active'); }
-    else { filterState.weekdays.add(wd); btn.classList.add('active'); }
+    filterState.weekdays = new Set([wd]);
+    document.querySelectorAll('.wd-btn').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.wd) === wd);
+    });
     renderDashboard();
   });
 });
@@ -891,9 +914,9 @@ function applyCustomFilter() {
   filterState.to   = document.getElementById('filter-to').value;
   renderDashboard();
 }
+const WD_MAP = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
 function getFiltered() {
-  const now = new Date(); let from, to;
-  if (filterState.range === 'all') return sessions;
+  const now = new Date(); let from = null, to = null;
   if (filterState.range === 'today') {
     from = new Date(now); from.setHours(0,0,0,0);
     to   = new Date(now); to.setHours(23,59,59,999);
@@ -901,24 +924,20 @@ function getFiltered() {
     from = new Date(now); from.setDate(from.getDate() - 1); from.setHours(0,0,0,0);
     to   = new Date(now); to.setDate(to.getDate() - 1);     to.setHours(23,59,59,999);
   } else if (filterState.range === 'custom') {
-    if (!filterState.from && !filterState.to) return sessions;
     from = filterState.from ? new Date(filterState.from) : null;
     to   = filterState.to   ? new Date(filterState.to + 'T23:59:59') : null;
-  } else {
+  } else if (filterState.range !== 'all') {
     const days = parseInt(filterState.range);
     from = new Date(now); from.setDate(from.getDate() - days + 1); from.setHours(0,0,0,0);
     to   = new Date(now); to.setHours(23,59,59,999);
   }
+  const allWd = filterState.weekdays.size === 7;
   return sessions.filter(s => {
     const d = new Date(s.startISO);
-    if ((!from || d >= from) && (!to || d <= to)) {
-      if (filterState.weekdays.size === 0) return true;
-      // Use IST day-of-week
-      const istDay = new Date(s.startISO).toLocaleDateString('en-US', { timeZone:'Asia/Kolkata', weekday:'short' });
-      const wdMap = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
-      return filterState.weekdays.has(wdMap[istDay]);
-    }
-    return false;
+    if (!(!from || d >= from) || !(!to || d <= to)) return false;
+    if (allWd) return true;
+    const istDay = d.toLocaleDateString('en-US', { timeZone:'Asia/Kolkata', weekday:'short' });
+    return filterState.weekdays.has(WD_MAP[istDay]);
   });
 }
 
