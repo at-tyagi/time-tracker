@@ -115,6 +115,15 @@ main{max-width:1100px;margin:0 auto;padding:24px 20px;display:flex;flex-directio
 .qf-btn{background:var(--surface2);border:1.5px solid var(--border);color:var(--text2);border-radius:6px;padding:5px 13px;font-size:.78rem;font-weight:500;cursor:pointer;transition:all .15s}
 .qf-btn:hover{border-color:var(--accent);color:var(--accent);background:#f0f1ff}
 .qf-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 4px rgba(91,94,246,.3)}
+.wd-btn{background:var(--surface2);border:1.5px solid var(--border);color:var(--muted);border-radius:99px;padding:3px 11px;font-size:.72rem;font-weight:700;cursor:pointer;transition:all .15s;letter-spacing:.02em}
+.wd-btn:hover{border-color:var(--accent);color:var(--accent);background:#f0f1ff}
+.wd-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 4px rgba(91,94,246,.3)}
+.wd-filter-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding-top:6px}
+.wd-filter-label{font-size:.7rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-right:3px;white-space:nowrap}
+.dtog-pill{display:inline-flex;background:var(--surface2);border:1.5px solid var(--border);border-radius:99px;padding:3px;gap:2px}
+.dtog-opt{background:none;border:none;border-radius:99px;padding:5px 14px;font-size:.75rem;font-weight:700;color:var(--muted);cursor:pointer;transition:all .18s;display:flex;align-items:center;gap:5px;white-space:nowrap;letter-spacing:.01em}
+.dtog-opt:hover{color:var(--text2);background:rgba(0,0,0,.04)}
+.dtog-opt.active{background:var(--accent);color:#fff;box-shadow:0 1px 6px rgba(91,94,246,.35)}
 .filter-group{display:flex;align-items:center;gap:8px}
 .filter-group label{font-size:.75rem;color:var(--muted);font-weight:500;white-space:nowrap}
 .filter-group input[type="date"]{padding:6px 10px;font-size:.8rem;width:auto}
@@ -318,6 +327,16 @@ tbody td strong{color:var(--text);font-weight:600}
         <div class="filter-group"><label>To</label><input type="date" id="filter-to"></div>
         <button class="btn btn-sm" onclick="applyCustomFilter()">Apply</button>
       </div>
+      <div class="wd-filter-row">
+        <span class="wd-filter-label">Weekday</span>
+        <button class="wd-btn" data-wd="1">Mon</button>
+        <button class="wd-btn" data-wd="2">Tue</button>
+        <button class="wd-btn" data-wd="3">Wed</button>
+        <button class="wd-btn" data-wd="4">Thu</button>
+        <button class="wd-btn" data-wd="5">Fri</button>
+        <button class="wd-btn" data-wd="6">Sat</button>
+        <button class="wd-btn" data-wd="0">Sun</button>
+      </div>
     </div>
 
     <!-- STATS -->
@@ -329,13 +348,29 @@ tbody td strong{color:var(--text);font-weight:600}
         <h3>Time by Task</h3>
         <div class="chart-wrap" id="donut-wrap"><canvas id="donut-chart"></canvas></div>
       </div>
-      <div class="chart-card">
-        <h3>Daily Hours</h3>
+      <div class="chart-card" id="daily-toggle-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <h3 style="margin:0" id="daily-toggle-title">Daily Hours</h3>
+          <div class="dtog-pill">
+            <button class="dtog-opt active" id="dtog-hours" onclick="setDailyToggle('hours')">
+              <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><rect x="2" y="6" width="2.5" height="8" rx="1" fill="currentColor"/><rect x="6.75" y="3" width="2.5" height="11" rx="1" fill="currentColor"/><rect x="11.5" y="8" width="2.5" height="6" rx="1" fill="currentColor"/></svg>
+              Hours
+            </button>
+            <button class="dtog-opt" id="dtog-sessions" onclick="setDailyToggle('sessions')">
+              <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><circle cx="4" cy="8" r="2" fill="currentColor"/><circle cx="8" cy="5" r="2" fill="currentColor"/><circle cx="12" cy="9" r="2" fill="currentColor"/></svg>
+              Sessions
+            </button>
+          </div>
+        </div>
         <div class="chart-wrap" id="bar-wrap"><canvas id="bar-chart"></canvas></div>
       </div>
       <div class="chart-card chart-full">
         <h3>Daily Breakdown by Task (Stacked)</h3>
         <div class="chart-wrap" style="height:280px" id="line-wrap"><canvas id="line-chart"></canvas></div>
+      </div>
+      <div class="chart-card chart-full">
+        <h3>Avg Session Length by Task</h3>
+        <div class="chart-wrap" id="avgsess-wrap"><canvas id="avgsess-chart"></canvas></div>
       </div>
     </div>
 
@@ -830,7 +865,16 @@ async function deleteSession(id) {
 // ══════════════════════════════════════════════════════════════════
 // FILTERS
 // ══════════════════════════════════════════════════════════════════
-let filterState = { range:'7', from:null, to:null };
+let filterState = { range:'7', from:null, to:null, weekdays: new Set() };
+
+document.querySelectorAll('.wd-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const wd = parseInt(btn.dataset.wd);
+    if (filterState.weekdays.has(wd)) { filterState.weekdays.delete(wd); btn.classList.remove('active'); }
+    else { filterState.weekdays.add(wd); btn.classList.add('active'); }
+    renderDashboard();
+  });
+});
 
 document.querySelectorAll('.qf-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -867,14 +911,101 @@ function getFiltered() {
   }
   return sessions.filter(s => {
     const d = new Date(s.startISO);
-    return (!from || d >= from) && (!to || d <= to);
+    if ((!from || d >= from) && (!to || d <= to)) {
+      if (filterState.weekdays.size === 0) return true;
+      // Use IST day-of-week
+      const istDay = new Date(s.startISO).toLocaleDateString('en-US', { timeZone:'Asia/Kolkata', weekday:'short' });
+      const wdMap = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
+      return filterState.weekdays.has(wdMap[istDay]);
+    }
+    return false;
   });
 }
 
 // ══════════════════════════════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════════════════════════════
-let donutChart, barChart, lineChart;
+let donutChart, barChart, lineChart, avgSessChart;
+let dailyToggleMode = 'hours';
+
+function setDailyToggle(mode) {
+  dailyToggleMode = mode;
+  document.getElementById('dtog-hours').classList.toggle('active', mode==='hours');
+  document.getElementById('dtog-sessions').classList.toggle('active', mode==='sessions');
+  document.getElementById('daily-toggle-title').textContent = mode==='hours' ? 'Daily Hours' : 'Sessions per Day';
+  renderDailyToggleChart(getFiltered());
+}
+
+function renderDailyToggleChart(s) {
+  const dayMap2 = {};
+  if (dailyToggleMode === 'hours') {
+    s.forEach(x => { const d=getISTDateKey(x.startISO); dayMap2[d]=(dayMap2[d]||0)+x.durationMs; });
+  } else {
+    s.forEach(x => { const d=getISTDateKey(x.startISO); dayMap2[d]=(dayMap2[d]||0)+1; });
+  }
+  const days = Object.entries(dayMap2).sort((a,b)=>a[0].localeCompare(b[0])).slice(-60);
+  if (barChart) { barChart.destroy(); barChart = null; }
+  if (!days.length) { emptyWrap('bar-wrap'); return; }
+  const rawCtx = resetWrap('bar-wrap','bar-chart');
+  const canvas = document.getElementById('bar-chart');
+
+  const isHours = dailyToggleMode === 'hours';
+  const values  = isHours ? days.map(([,v])=>+(v/3600000).toFixed(2)) : days.map(([,v])=>v);
+  const labels  = days.map(([d])=>new Date(d+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'}));
+
+  // Trading-style gradient fill
+  const grad = rawCtx.createLinearGradient(0, 0, 0, canvas.offsetHeight || 260);
+  grad.addColorStop(0, isHours ? 'rgba(91,94,246,0.28)' : 'rgba(6,182,212,0.28)');
+  grad.addColorStop(1, isHours ? 'rgba(91,94,246,0.0)'  : 'rgba(6,182,212,0.0)');
+
+  const lineColor = isHours ? '#5b5ef6' : '#06b6d4';
+
+  barChart = new Chart(rawCtx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: isHours ? 'Hours' : 'Sessions',
+        data: values,
+        borderColor: lineColor,
+        backgroundColor: grad,
+        fill: true,
+        tension: 0.4,
+        pointRadius: days.length > 30 ? 0 : 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: lineColor,
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        borderWidth: 2.5
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(17,24,39,0.92)',
+          titleColor: '#e5e7eb',
+          bodyColor: '#d1d5db',
+          borderColor: 'rgba(255,255,255,0.08)',
+          borderWidth: 1,
+          padding: 10,
+          callbacks: {
+            label: ctx => isHours ? ` ${fmtDurHuman(ctx.raw*3600000)}` : ` ${ctx.raw} session${ctx.raw!==1?'s':''}`
+          }
+        }
+      },
+      scales: {
+        x: { ticks:{color:'#6b7280',font:{size:11},maxRotation:45}, grid:{color:'rgba(0,0,0,.05)'}, border:{color:'rgba(0,0,0,.08)'} },
+        y: {
+          ticks:{ color:'#6b7280', font:{size:11}, callback: v => isHours ? (v===0?'0':v+'h') : v },
+          grid:{ color:'rgba(0,0,0,.05)' }, border:{ color:'rgba(0,0,0,.08)' }, beginAtZero:true
+        }
+      }
+    }
+  });
+}
 const COLORS = ['#5b5ef6','#0ea572','#f59e0b','#06b6d4','#ec4899','#8b5cf6','#f97316','#10b981','#ef4444','#3b82f6'];
 
 function resetWrap(id, canvasId) {
@@ -944,35 +1075,9 @@ function renderDashboard() {
     });
   }
 
-  // ── bar (daily total, color-coded by intensity) ──
+  // ── daily toggle chart (hours or sessions) ──
   const sortedDays = Object.entries(dayMap).sort((a,b)=>a[0].localeCompare(b[0])).slice(-60);
-  if (barChart) { barChart.destroy(); barChart = null; }
-  if (!sortedDays.length) { emptyWrap('bar-wrap'); }
-  else {
-    const ctx = resetWrap('bar-wrap','bar-chart');
-    const barColors = sortedDays.map(([,v]) => {
-      const h = v/3600000;
-      if (h>=6) return '#0ea572'; if (h>=3) return '#5b5ef6'; if (h>=1) return '#8b5cf6'; return '#d1d5db';
-    });
-    barChart = new Chart(ctx, {
-      type:'bar',
-      data: {
-        labels: sortedDays.map(([d]) => new Date(d+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})),
-        datasets: [{ label:'Hours', data: sortedDays.map(([,v])=>+(v/3600000).toFixed(2)), backgroundColor:barColors, borderRadius:5, borderSkipped:false }]
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        plugins: {
-          legend:{display:false},
-          tooltip:{callbacks:{label: ctx => ` ${fmtDurHuman(ctx.raw*3600000)}`}}
-        },
-        scales: {
-          x:{ ticks:{color:'#6b7280',font:{size:11},maxRotation:45}, grid:{color:'rgba(0,0,0,.06)'}, border:{color:'rgba(0,0,0,.08)'} },
-          y:{ ticks:{color:'#6b7280',font:{size:11},callback:v=>v===0?'0':v+'h'}, grid:{color:'rgba(0,0,0,.06)'}, border:{color:'rgba(0,0,0,.08)'}, beginAtZero:true }
-        }
-      }
-    });
-  }
+  renderDailyToggleChart(s);
 
   // ── stacked bar: daily hours per task ──
   const allDays = Object.keys(dayMap).sort().slice(-30);
@@ -1013,6 +1118,53 @@ function renderDashboard() {
         scales: {
           x:{ stacked:true, ticks:{color:'#6b7280',font:{size:11},maxRotation:45}, grid:{color:'rgba(0,0,0,.06)'}, border:{color:'rgba(0,0,0,.08)'} },
           y:{ stacked:true, ticks:{color:'#6b7280',font:{size:11},callback:v=>v===0?'0':v+'h'}, grid:{color:'rgba(0,0,0,.06)'}, border:{color:'rgba(0,0,0,.08)'}, beginAtZero:true }
+        }
+      }
+    });
+  }
+
+
+  // ── avg session length by task horizontal bar ──
+  const taskSessionData = {};
+  s.forEach(x => {
+    if (!taskSessionData[x.name]) taskSessionData[x.name] = { total:0, count:0 };
+    taskSessionData[x.name].total += x.durationMs;
+    taskSessionData[x.name].count++;
+  });
+  const avgEntries = Object.entries(taskSessionData)
+    .map(([name,{total,count}]) => [name, total/count])
+    .sort((a,b) => b[1]-a[1]).slice(0,8);
+  if (avgSessChart) { avgSessChart.destroy(); avgSessChart = null; }
+  if (!avgEntries.length) { emptyWrap('avgsess-wrap'); }
+  else {
+    const barH = 32, padV = 40;
+    document.getElementById('avgsess-wrap').style.height = (avgEntries.length * barH + padV) + 'px';
+    const ctx = resetWrap('avgsess-wrap','avgsess-chart');
+    const maxVal = Math.max(...avgEntries.map(([,v])=>v/3600000));
+    avgSessChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: avgEntries.map(([k])=>k),
+        datasets: [{
+          label: 'Avg Session',
+          data: avgEntries.map(([,v])=>+(v/3600000).toFixed(2)),
+          backgroundColor: avgEntries.map((_,i)=>COLORS[i%COLORS.length]),
+          borderRadius: 4,
+          borderSkipped: false,
+          barThickness: barH - 8
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        layout: { padding: { right: 8 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` avg ${fmtDurHuman(ctx.raw*3600000)}` } }
+        },
+        scales: {
+          x: { max: +(maxVal * 1.05).toFixed(2), ticks:{color:'#6b7280',font:{size:11},callback:v=>v+'h'}, grid:{color:'rgba(0,0,0,.06)'}, border:{color:'rgba(0,0,0,.08)'}, beginAtZero:true },
+          y: { ticks:{color:'#374151',font:{size:11}}, grid:{display:false}, border:{color:'rgba(0,0,0,.08)'} }
         }
       }
     });
@@ -1298,6 +1450,7 @@ document.getElementById('s-pass').addEventListener('keydown', e => { if (e.key==
   if (get(LS.GIST_ID)) showScreen('screen-login');
   else showScreen('screen-setup');
 })();
+
 </script>
 </body>
 </html>
