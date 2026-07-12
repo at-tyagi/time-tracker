@@ -1173,12 +1173,16 @@ function renderDashboard() {
   }
 
 
-  // ── avg time per day by task: total task time / total active days in filter ──
-  const totalDays = Object.keys(dayMap).length || 1;
+  // ── avg time per day by task: total task time / days that task was actually performed ──
+  const taskDaysSet = {};
   const taskTotalsForAvg = {};
-  s.forEach(x => { taskTotalsForAvg[x.name] = (taskTotalsForAvg[x.name]||0) + x.durationMs; });
+  s.forEach(x => {
+    taskTotalsForAvg[x.name] = (taskTotalsForAvg[x.name]||0) + x.durationMs;
+    if (!taskDaysSet[x.name]) taskDaysSet[x.name] = new Set();
+    taskDaysSet[x.name].add(getISTDateKey(x.startISO));
+  });
   const avgEntries = Object.entries(taskTotalsForAvg)
-    .map(([name, total]) => [name, total / totalDays])
+    .map(([name, total]) => [name, total / taskDaysSet[name].size])
     .sort((a,b) => b[1]-a[1]).slice(0,8);
   if (avgSessChart) { avgSessChart.destroy(); avgSessChart = null; }
   if (!avgEntries.length) { emptyWrap('avgsess-wrap'); }
