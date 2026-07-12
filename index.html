@@ -915,7 +915,7 @@ function applyCustomFilter() {
   renderDashboard();
 }
 const WD_MAP = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
-function getFiltered() {
+function getFilterWindow() {
   const now = new Date(); let from = null, to = null;
   if (filterState.range === 'today') {
     from = new Date(now); from.setHours(0,0,0,0);
@@ -931,6 +931,11 @@ function getFiltered() {
     from = new Date(now); from.setDate(from.getDate() - days + 1); from.setHours(0,0,0,0);
     to   = new Date(now); to.setHours(23,59,59,999);
   }
+  return { from, to };
+}
+
+function getFiltered() {
+  const { from, to } = getFilterWindow();
   const allWd = filterState.weekdays.size === 7;
   return sessions.filter(s => {
     const d = new Date(s.startISO);
@@ -938,6 +943,16 @@ function getFiltered() {
     if (allWd) return true;
     const istDay = d.toLocaleDateString('en-US', { timeZone:'Asia/Kolkata', weekday:'short' });
     return filterState.weekdays.has(WD_MAP[istDay]);
+  });
+}
+
+// Split session by IST day and clip resulting segments to [from, to] window.
+function splitAndClip(s, from, to) {
+  return splitSessionByDay(s).filter(seg => {
+    const segStart = new Date(seg.startISO).getTime();
+    if (from && segStart < from.getTime()) return false;
+    if (to   && segStart > to.getTime())   return false;
+    return true;
   });
 }
 
@@ -952,13 +967,13 @@ function setDailyToggle(mode) {
   document.getElementById('dtog-hours').classList.toggle('active', mode==='hours');
   document.getElementById('dtog-sessions').classList.toggle('active', mode==='sessions');
   document.getElementById('daily-toggle-title').textContent = mode==='hours' ? 'Daily Hours' : 'Sessions per Day';
-  renderDailyToggleChart(getFiltered());
+  const { from: _f, to: _t } = getFilterWindow(); renderDailyToggleChart(getFiltered(), _f, _t);
 }
 
-function renderDailyToggleChart(s) {
+function renderDailyToggleChart(s, from, to) {
   const dayMap2 = {};
   if (dailyToggleMode === 'hours') {
-    s.forEach(x => splitSessionByDay(x).forEach(seg => { const d=getISTDateKey(seg.startISO); dayMap2[d]=(dayMap2[d]||0)+seg.durationMs; }));
+    s.forEach(x => splitAndClip(x, from, to).forEach(seg => { const d=getISTDateKey(seg.startISO); dayMap2[d]=(dayMap2[d]||0)+seg.durationMs; }));
   } else {
     s.forEach(x => { const d=getISTDateKey(x.startISO); dayMap2[d]=(dayMap2[d]||0)+1; });
   }
@@ -1038,12 +1053,13 @@ function emptyWrap(id) {
 
 function renderDashboard() {
   const s = getFiltered();
+  const { from, to } = getFilterWindow();
 
   // ── stats ──
   const totalMs = s.reduce((acc, x) => acc + x.durationMs, 0);
   const taskSet = new Set(s.map(x => x.name));
   const dayMap  = {};
-  s.forEach(x => splitSessionByDay(x).forEach(seg => { const d=getISTDateKey(seg.startISO); dayMap[d]=(dayMap[d]||0)+seg.durationMs; }));
+  s.forEach(x => splitAndClip(x, from, to).forEach(seg => { const d=getISTDateKey(seg.startISO); dayMap[d]=(dayMap[d]||0)+seg.durationMs; }));
   const avgMs = Object.keys(dayMap).length ? totalMs / Object.keys(dayMap).length : 0;
   const maxSession = s.length ? s.reduce((a,b) => a.durationMs > b.durationMs ? a : b) : null;
 
@@ -1096,12 +1112,12 @@ function renderDashboard() {
 
   // ── daily toggle chart (hours or sessions) ──
   const sortedDays = Object.entries(dayMap).sort((a,b)=>a[0].localeCompare(b[0])).slice(-60);
-  renderDailyToggleChart(s);
+  renderDailyToggleChart(s, from, to);
 
   // ── stacked bar: daily hours per task ──
   const allDays = Object.keys(dayMap).sort().slice(-30);
   const taskDayMap = {};
-  s.forEach(x => splitSessionByDay(x).forEach(seg => { const d=getISTDateKey(seg.startISO); if (!taskDayMap[x.name]) taskDayMap[x.name]={}; taskDayMap[x.name][d]=(taskDayMap[x.name][d]||0)+seg.durationMs; }));
+  s.forEach(x => splitAndClip(x, from, to).forEach(seg => { const d=getISTDateKey(seg.startISO); if (!taskDayMap[x.name]) taskDayMap[x.name]={}; taskDayMap[x.name][d]=(taskDayMap[x.name][d]||0)+seg.durationMs; }));
   if (lineChart) { lineChart.destroy(); lineChart = null; }
   if (!allDays.length || !taskEntries.length) { emptyWrap('line-wrap'); }
   else {
@@ -1385,9 +1401,9 @@ document.querySelectorAll('[data-tl-range]').forEach(btn => {
   });
 });
 
-function getTLFiltered() {
+function getTLWindow() {
   const now = new Date();
-  if (tlFilterRange === 'all') return sessions;
+  if (tlFilterRange === 'all') return { from: null, to: null };
   let from, to;
   if (tlFilterRange === 'today') {
     from = new Date(now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) + 'T00:00:00+05:30');
@@ -1402,6 +1418,12 @@ function getTLFiltered() {
     from = new Date(now); from.setDate(from.getDate() - days + 1); from.setHours(0,0,0,0);
     to   = new Date(now); to.setHours(23,59,59,999);
   }
+  return { from, to };
+}
+
+function getTLFiltered() {
+  const { from, to } = getTLWindow();
+  if (!from && !to) return sessions;
   return sessions.filter(s => { const d = new Date(s.startISO); return d >= from && d <= to; });
 }
 
@@ -1410,16 +1432,17 @@ function getTLFiltered() {
 // ══════════════════════════════════════════════════════════════════
 function renderTimeline() {
   const s = getTLFiltered();
+  const { from: tlFrom, to: tlTo } = getTLWindow();
   // Build rows including active
   const allRows = activeTask
     ? [{ id:'__active__', name:activeTask.name, startISO:activeTask.startISO, endISO:null, durationMs:Date.now()-activeTask.startTs }, ...s]
     : [...s];
 
-  // Group by IST date, splitting sessions that cross midnight
+  // Group by IST date, splitting sessions that cross midnight and clipping to filter window
   const groups = {};
   allRows.forEach(r => {
-    const segs = splitSessionByDay(r);
-    const isSplit = segs.length > 1;
+    const segs = splitAndClip(r, tlFrom, tlTo);
+    const isSplit = splitSessionByDay(r).length > 1;
     segs.forEach(seg => {
       const key = getISTDateKey(seg.startISO);
       if (!groups[key]) groups[key] = [];
