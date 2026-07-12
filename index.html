@@ -1270,10 +1270,14 @@ function renderDashboard() {
       options: {
         responsive:true, maintainAspectRatio:false,
         interaction:{mode:'index',intersect:false},
-        onClick: (_, elements) => {
-          if (!elements.length) return;
-          const datasetIndex = elements[0].datasetIndex;
-          const parentName = taskEntries[datasetIndex][0];
+        onClick: (event, elements) => {
+          // elements from Chart.js click with mode:'index' may include all datasets;
+          // use the canvas position to find the nearest element instead
+          const chart = lineChart;
+          if (!chart) return;
+          const pts = chart.getElementsAtEventForMode(event.native || event, 'nearest', { intersect: true }, false);
+          if (!pts.length) return;
+          const parentName = taskEntries[pts[0].datasetIndex][0];
           openDrilldown(parentName, taskSegments[parentName]);
         },
         plugins: {
