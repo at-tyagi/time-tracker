@@ -1229,7 +1229,7 @@ function renderDashboard() {
     const isActive  = r.id === '__active__';
     const isSplit   = r._splitSeg;
     const nameBadge = isSplit ? ` <span style="font-size:10px;font-weight:normal;opacity:0.5">(cont'd)</span>` : '';
-    const canDelete = !isActive && !isSplit;
+    const canDelete = !isActive;
     return `
     <tr>
       <td><strong>${esc(r.name)}</strong>${nameBadge}</td>
