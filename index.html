@@ -934,29 +934,32 @@ function getFilterWindow() {
   return { from, to };
 }
 
+// Returns sessions split at IST midnight and clipped to [from, to].
+// Each returned segment is a plain object with the same shape as a session.
+// Segments that are splits carry _splitSeg:true for the table badge.
 function getFiltered() {
   const { from, to } = getFilterWindow();
   const allWd = filterState.weekdays.size === 7;
-  return sessions.filter(s => {
+  const result = [];
+  for (const s of sessions) {
     const start = new Date(s.startISO).getTime();
     const end   = s.endISO ? new Date(s.endISO).getTime() : Date.now();
-    // include if session overlaps [from, to]
-    if (from && end   < from.getTime()) return false;
-    if (to   && start > to.getTime())   return false;
-    if (allWd) return true;
-    const istDay = new Date(s.startISO).toLocaleDateString('en-US', { timeZone:'Asia/Kolkata', weekday:'short' });
-    return filterState.weekdays.has(WD_MAP[istDay]);
-  });
-}
-
-// Split session by IST day and clip resulting segments to [from, to] window.
-function splitAndClip(s, from, to) {
-  return splitSessionByDay(s).filter(seg => {
-    const segStart = new Date(seg.startISO).getTime();
-    if (from && segStart < from.getTime()) return false;
-    if (to   && segStart > to.getTime())   return false;
-    return true;
-  });
+    if (from && end   < from.getTime()) continue;
+    if (to   && start > to.getTime())   continue;
+    if (!allWd) {
+      const istDay = new Date(s.startISO).toLocaleDateString('en-US', { timeZone:'Asia/Kolkata', weekday:'short' });
+      if (!filterState.weekdays.has(WD_MAP[istDay])) continue;
+    }
+    const segs = splitSessionByDay(s);
+    const isSplit = segs.length > 1;
+    for (const seg of segs) {
+      const segStart = new Date(seg.startISO).getTime();
+      if (from && segStart < from.getTime()) continue;
+      if (to   && segStart > to.getTime())   continue;
+      result.push(isSplit ? { ...seg, _splitSeg: true } : seg);
+    }
+  }
+  return result;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -970,15 +973,23 @@ function setDailyToggle(mode) {
   document.getElementById('dtog-hours').classList.toggle('active', mode==='hours');
   document.getElementById('dtog-sessions').classList.toggle('active', mode==='sessions');
   document.getElementById('daily-toggle-title').textContent = mode==='hours' ? 'Daily Hours' : 'Sessions per Day';
-  const { from: _f, to: _t } = getFilterWindow(); renderDailyToggleChart(getFiltered(), _f, _t);
+  renderDailyToggleChart(getFiltered());
 }
 
-function renderDailyToggleChart(s, from, to) {
+function renderDailyToggleChart(s) {
   const dayMap2 = {};
   if (dailyToggleMode === 'hours') {
-    s.forEach(x => splitAndClip(x, from, to).forEach(seg => { const d=getISTDateKey(seg.startISO); dayMap2[d]=(dayMap2[d]||0)+seg.durationMs; }));
+    s.forEach(x => { const d=getISTDateKey(x.startISO); dayMap2[d]=(dayMap2[d]||0)+x.durationMs; });
   } else {
-    s.forEach(x => { const d=getISTDateKey(x.startISO); dayMap2[d]=(dayMap2[d]||0)+1; });
+    // count sessions per day; split segments count only for the day they start on
+    const counted = new Set();
+    s.forEach(x => {
+      const key = x._splitSeg ? x.id + '_' + getISTDateKey(x.startISO) : x.id;
+      if (counted.has(key)) return;
+      counted.add(key);
+      const d = getISTDateKey(x.startISO);
+      dayMap2[d] = (dayMap2[d]||0) + 1;
+    });
   }
   const days = Object.entries(dayMap2).sort((a,b)=>a[0].localeCompare(b[0])).slice(-60);
   if (barChart) { barChart.destroy(); barChart = null; }
@@ -1055,19 +1066,19 @@ function emptyWrap(id) {
 }
 
 function renderDashboard() {
-  const s = getFiltered();
-  const { from, to } = getFilterWindow();
+  const s = getFiltered(); // already split+clipped segments
 
   // ── stats ──
   const totalMs = s.reduce((acc, x) => acc + x.durationMs, 0);
   const taskSet = new Set(s.map(x => x.name));
   const dayMap  = {};
-  s.forEach(x => splitAndClip(x, from, to).forEach(seg => { const d=getISTDateKey(seg.startISO); dayMap[d]=(dayMap[d]||0)+seg.durationMs; }));
+  s.forEach(x => { const d=getISTDateKey(x.startISO); dayMap[d]=(dayMap[d]||0)+x.durationMs; });
   const avgMs = Object.keys(dayMap).length ? totalMs / Object.keys(dayMap).length : 0;
+  const origCount = new Set(s.map(x => x.id)).size; // count original sessions, not split segments
   const maxSession = s.length ? s.reduce((a,b) => a.durationMs > b.durationMs ? a : b) : null;
 
   document.getElementById('stats-row').innerHTML = `
-    <div class="stat-card"><div class="lbl">Total Time</div><div class="val">${fmtDurHuman(totalMs)}</div><div class="sub">${s.length} sessions</div></div>
+    <div class="stat-card"><div class="lbl">Total Time</div><div class="val">${fmtDurHuman(totalMs)}</div><div class="sub">${origCount} sessions</div></div>
     <div class="stat-card"><div class="lbl">Unique Tasks</div><div class="val">${taskSet.size}</div><div class="sub">${Object.keys(dayMap).length} active days</div></div>
     <div class="stat-card"><div class="lbl">Avg / Day</div><div class="val">${fmtDurHuman(avgMs)}</div><div class="sub">in selected range</div></div>
     <div class="stat-card"><div class="lbl">Longest Session</div><div class="val">${maxSession ? fmtDurHuman(maxSession.durationMs) : '—'}</div><div class="sub">${maxSession ? esc(maxSession.name) : ''}</div></div>
@@ -1115,12 +1126,12 @@ function renderDashboard() {
 
   // ── daily toggle chart (hours or sessions) ──
   const sortedDays = Object.entries(dayMap).sort((a,b)=>a[0].localeCompare(b[0])).slice(-60);
-  renderDailyToggleChart(s, from, to);
+  renderDailyToggleChart(s);
 
   // ── stacked bar: daily hours per task ──
   const allDays = Object.keys(dayMap).sort().slice(-30);
   const taskDayMap = {};
-  s.forEach(x => splitAndClip(x, from, to).forEach(seg => { const d=getISTDateKey(seg.startISO); if (!taskDayMap[x.name]) taskDayMap[x.name]={}; taskDayMap[x.name][d]=(taskDayMap[x.name][d]||0)+seg.durationMs; }));
+  s.forEach(x => { const d=getISTDateKey(x.startISO); if (!taskDayMap[x.name]) taskDayMap[x.name]={}; taskDayMap[x.name][d]=(taskDayMap[x.name][d]||0)+x.durationMs; });
   if (lineChart) { lineChart.destroy(); lineChart = null; }
   if (!allDays.length || !taskEntries.length) { emptyWrap('line-wrap'); }
   else {
@@ -1217,15 +1228,21 @@ function renderDashboard() {
     tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No sessions yet. Start tracking!</div></td></tr>`;
     return;
   }
-  tbody.innerHTML = rows.map(r => `
+  tbody.innerHTML = rows.map(r => {
+    const isActive  = r.id === '__active__';
+    const isSplit   = r._splitSeg;
+    const nameBadge = isSplit ? ` <span style="font-size:10px;font-weight:normal;opacity:0.5">(cont'd)</span>` : '';
+    const canDelete = !isActive && !isSplit;
+    return `
     <tr>
-      <td><strong>${esc(r.name)}</strong></td>
+      <td><strong>${esc(r.name)}</strong>${nameBadge}</td>
       <td>${fmtDT(r.startISO)}</td>
       <td>${r.endISO ? fmtDT(r.endISO) : '—'}</td>
       <td>${fmtDurHuman(r.durationMs)}</td>
       <td>${r.endISO ? '<span class="tag tag-done">Done</span>' : '<span class="tag tag-running">Running</span>'}</td>
-      <td>${r.id!=='__active__' ? `<button class="del-btn" onclick="deleteSession('${r.id}')" title="Delete">✕</button>` : ''}</td>
-    </tr>`).join('');
+      <td>${canDelete ? `<button class="del-btn" onclick="deleteSession('${r.id}')" title="Delete">✕</button>` : ''}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1426,38 +1443,40 @@ function getTLWindow() {
 
 function getTLFiltered() {
   const { from, to } = getTLWindow();
-  if (!from && !to) return sessions;
-  return sessions.filter(s => {
+  const result = [];
+  for (const s of sessions) {
     const start = new Date(s.startISO).getTime();
     const end   = s.endISO ? new Date(s.endISO).getTime() : Date.now();
-    // include if session overlaps [from, to]
-    if (from && end   < from.getTime()) return false;
-    if (to   && start > to.getTime())   return false;
-    return true;
-  });
+    if (from && end   < from.getTime()) continue;
+    if (to   && start > to.getTime())   continue;
+    const segs = splitSessionByDay(s);
+    const isSplit = segs.length > 1;
+    for (const seg of segs) {
+      const segStart = new Date(seg.startISO).getTime();
+      if (from && segStart < from.getTime()) continue;
+      if (to   && segStart > to.getTime())   continue;
+      result.push(isSplit ? { ...seg, _splitSeg: true } : seg);
+    }
+  }
+  return result;
 }
 
 // ══════════════════════════════════════════════════════════════════
 // TIMELINE RENDERER
 // ══════════════════════════════════════════════════════════════════
 function renderTimeline() {
-  const s = getTLFiltered();
-  const { from: tlFrom, to: tlTo } = getTLWindow();
+  const s = getTLFiltered(); // already split+clipped
   // Build rows including active
   const allRows = activeTask
     ? [{ id:'__active__', name:activeTask.name, startISO:activeTask.startISO, endISO:null, durationMs:Date.now()-activeTask.startTs }, ...s]
     : [...s];
 
-  // Group by IST date, splitting sessions that cross midnight and clipping to filter window
+  // Group by IST date
   const groups = {};
   allRows.forEach(r => {
-    const segs = splitAndClip(r, tlFrom, tlTo);
-    const isSplit = splitSessionByDay(r).length > 1;
-    segs.forEach(seg => {
-      const key = getISTDateKey(seg.startISO);
-      if (!groups[key]) groups[key] = [];
-      groups[key].push({ ...seg, _isSplitSeg: isSplit });
-    });
+    const key = getISTDateKey(r.startISO);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
   });
 
   const sortedKeys = Object.keys(groups).sort((a,b) => b.localeCompare(a));
@@ -1478,7 +1497,7 @@ function renderTimeline() {
       const color = COLORS[idx % COLORS.length];
       const barPct = Math.round(r.durationMs / maxMs * 100);
       const isRunning = r.id === '__active__';
-      const splitBadge = r._isSplitSeg ? ' <span style="font-size:10px;opacity:0.55;font-weight:normal">(cont\'d)</span>' : '';
+      const splitBadge = r._splitSeg ? ' <span style="font-size:10px;opacity:0.55;font-weight:normal">(cont\'d)</span>' : '';
       return `
         <div class="tl-row">
           <div class="tl-time">
