@@ -369,7 +369,7 @@ tbody td strong{color:var(--text);font-weight:600}
         <div class="chart-wrap" style="height:280px" id="line-wrap"><canvas id="line-chart"></canvas></div>
       </div>
       <div class="chart-card chart-full">
-        <h3>Avg Session Length by Task</h3>
+        <h3>Avg Time per Day by Task</h3>
         <div class="chart-wrap" id="avgsess-wrap"><canvas id="avgsess-chart"></canvas></div>
       </div>
     </div>
@@ -1173,15 +1173,12 @@ function renderDashboard() {
   }
 
 
-  // ── avg session length by task horizontal bar ──
-  const taskSessionData = {};
-  s.forEach(x => {
-    if (!taskSessionData[x.name]) taskSessionData[x.name] = { total:0, count:0 };
-    taskSessionData[x.name].total += x.durationMs;
-    taskSessionData[x.name].count++;
-  });
-  const avgEntries = Object.entries(taskSessionData)
-    .map(([name,{total,count}]) => [name, total/count])
+  // ── avg time per day by task: total task time / total active days in filter ──
+  const totalDays = Object.keys(dayMap).length || 1;
+  const taskTotalsForAvg = {};
+  s.forEach(x => { taskTotalsForAvg[x.name] = (taskTotalsForAvg[x.name]||0) + x.durationMs; });
+  const avgEntries = Object.entries(taskTotalsForAvg)
+    .map(([name, total]) => [name, total / totalDays])
     .sort((a,b) => b[1]-a[1]).slice(0,8);
   if (avgSessChart) { avgSessChart.destroy(); avgSessChart = null; }
   if (!avgEntries.length) { emptyWrap('avgsess-wrap'); }
@@ -1195,7 +1192,7 @@ function renderDashboard() {
       data: {
         labels: avgEntries.map(([k])=>k),
         datasets: [{
-          label: 'Avg Session',
+          label: 'Avg / Day',
           data: avgEntries.map(([,v])=>+(v/3600000).toFixed(2)),
           backgroundColor: avgEntries.map((_,i)=>COLORS[i%COLORS.length]),
           borderRadius: 4,
@@ -1209,7 +1206,7 @@ function renderDashboard() {
         layout: { padding: { right: 8 } },
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: ctx => ` avg ${fmtDurHuman(ctx.raw*3600000)}` } }
+          tooltip: { callbacks: { label: ctx => ` avg ${fmtDurHuman(ctx.raw*3600000)} / day` } }
         },
         scales: {
           x: { max: +(maxVal * 1.05).toFixed(2), ticks:{color:'#6b7280',font:{size:11},callback:v=>v+'h'}, grid:{color:'rgba(0,0,0,.06)'}, border:{color:'rgba(0,0,0,.08)'}, beginAtZero:true },
