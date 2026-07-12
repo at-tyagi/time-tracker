@@ -938,10 +938,13 @@ function getFiltered() {
   const { from, to } = getFilterWindow();
   const allWd = filterState.weekdays.size === 7;
   return sessions.filter(s => {
-    const d = new Date(s.startISO);
-    if (!(!from || d >= from) || !(!to || d <= to)) return false;
+    const start = new Date(s.startISO).getTime();
+    const end   = s.endISO ? new Date(s.endISO).getTime() : Date.now();
+    // include if session overlaps [from, to]
+    if (from && end   < from.getTime()) return false;
+    if (to   && start > to.getTime())   return false;
     if (allWd) return true;
-    const istDay = d.toLocaleDateString('en-US', { timeZone:'Asia/Kolkata', weekday:'short' });
+    const istDay = new Date(s.startISO).toLocaleDateString('en-US', { timeZone:'Asia/Kolkata', weekday:'short' });
     return filterState.weekdays.has(WD_MAP[istDay]);
   });
 }
@@ -1424,7 +1427,14 @@ function getTLWindow() {
 function getTLFiltered() {
   const { from, to } = getTLWindow();
   if (!from && !to) return sessions;
-  return sessions.filter(s => { const d = new Date(s.startISO); return d >= from && d <= to; });
+  return sessions.filter(s => {
+    const start = new Date(s.startISO).getTime();
+    const end   = s.endISO ? new Date(s.endISO).getTime() : Date.now();
+    // include if session overlaps [from, to]
+    if (from && end   < from.getTime()) return false;
+    if (to   && start > to.getTime())   return false;
+    return true;
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════
