@@ -607,6 +607,7 @@ async function createNewGist(blob) {
 let currentPassword = null;
 let sessions = [];
 let activeTask = null; // in-memory, synced to Gist
+let saveInFlight = false; // prevent pollGist from overwriting an in-progress save
 
 async function loadFromGist() {
   const blob = await readGist();
@@ -636,6 +637,7 @@ async function loadFromGist() {
 }
 
 async function saveToGist() {
+  saveInFlight = true;
   showSync(true);
   try {
     const token    = get(LS.TOKEN);
@@ -646,6 +648,8 @@ async function saveToGist() {
   } catch (e) {
     showSync(false, false);
     toast('Sync failed: ' + e.message, true);
+  } finally {
+    saveInFlight = false;
   }
 }
 
@@ -777,6 +781,7 @@ async function enterApp() {
   renderDashboard();
   // Poll Gist immediately, then every 30s
   async function pollGist() {
+    if (saveInFlight) return; // don't overwrite an in-progress save
     try {
       await loadFromGist();
       renderDashboard();
@@ -1379,14 +1384,15 @@ function startNameEdit(id, btn) {
   input.select();
 }
 
-function saveNameEdit(id, btn) {
+async function saveNameEdit(id, btn) {
   const td = btn.parentElement;
   const input = td.querySelector('.name-edit-input');
   const newName = input.value.trim().toLowerCase();
   if (!newName) { toast('Name cannot be empty', true); return; }
   sessions.forEach(s => { if (s.id === id) s.name = newName; });
+  await saveSessions();
   renderDashboard();
-  saveSessions().catch(() => {});
+  if (currentView === 'timeline') renderTimeline();
   toast('Name updated');
 }
 
