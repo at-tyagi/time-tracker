@@ -958,7 +958,7 @@ function setDailyToggle(mode) {
 function renderDailyToggleChart(s) {
   const dayMap2 = {};
   if (dailyToggleMode === 'hours') {
-    s.forEach(x => { const d=getISTDateKey(x.startISO); dayMap2[d]=(dayMap2[d]||0)+x.durationMs; });
+    s.forEach(x => splitSessionByDay(x).forEach(seg => { const d=getISTDateKey(seg.startISO); dayMap2[d]=(dayMap2[d]||0)+seg.durationMs; }));
   } else {
     s.forEach(x => { const d=getISTDateKey(x.startISO); dayMap2[d]=(dayMap2[d]||0)+1; });
   }
@@ -1043,7 +1043,7 @@ function renderDashboard() {
   const totalMs = s.reduce((acc, x) => acc + x.durationMs, 0);
   const taskSet = new Set(s.map(x => x.name));
   const dayMap  = {};
-  s.forEach(x => { const d = getISTDateKey(x.startISO); dayMap[d] = (dayMap[d]||0) + x.durationMs; });
+  s.forEach(x => splitSessionByDay(x).forEach(seg => { const d=getISTDateKey(seg.startISO); dayMap[d]=(dayMap[d]||0)+seg.durationMs; }));
   const avgMs = Object.keys(dayMap).length ? totalMs / Object.keys(dayMap).length : 0;
   const maxSession = s.length ? s.reduce((a,b) => a.durationMs > b.durationMs ? a : b) : null;
 
@@ -1101,7 +1101,7 @@ function renderDashboard() {
   // ── stacked bar: daily hours per task ──
   const allDays = Object.keys(dayMap).sort().slice(-30);
   const taskDayMap = {};
-  s.forEach(x => { const d=getISTDateKey(x.startISO); if (!taskDayMap[x.name]) taskDayMap[x.name]={}; taskDayMap[x.name][d]=(taskDayMap[x.name][d]||0)+x.durationMs; });
+  s.forEach(x => splitSessionByDay(x).forEach(seg => { const d=getISTDateKey(seg.startISO); if (!taskDayMap[x.name]) taskDayMap[x.name]={}; taskDayMap[x.name][d]=(taskDayMap[x.name][d]||0)+seg.durationMs; }));
   if (lineChart) { lineChart.destroy(); lineChart = null; }
   if (!allDays.length || !taskEntries.length) { emptyWrap('line-wrap'); }
   else {
@@ -1349,6 +1349,28 @@ function getISTDateKey(iso) {
   return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
+// IST offset in ms (+05:30)
+const IST_OFFSET_MS = 19800000;
+
+// Split a session at IST midnight boundaries. Returns 1+ segments with adjusted startISO/endISO/durationMs.
+function splitSessionByDay(s) {
+  if (!s.endISO) return [s]; // active/running — no split
+  const startMs = new Date(s.startISO).getTime();
+  const endMs   = new Date(s.endISO).getTime();
+  const segments = [];
+  let segStart = startMs;
+  while (true) {
+    const nextMidnight = (Math.floor((segStart + IST_OFFSET_MS) / 86400000) + 1) * 86400000 - IST_OFFSET_MS;
+    if (nextMidnight >= endMs) {
+      segments.push({ ...s, startISO: new Date(segStart).toISOString(), endISO: s.endISO, durationMs: endMs - segStart });
+      break;
+    }
+    segments.push({ ...s, startISO: new Date(segStart).toISOString(), endISO: new Date(nextMidnight).toISOString(), durationMs: nextMidnight - segStart });
+    segStart = nextMidnight;
+  }
+  return segments;
+}
+
 // ══════════════════════════════════════════════════════════════════
 // TIMELINE FILTER
 // ══════════════════════════════════════════════════════════════════
@@ -1393,12 +1415,16 @@ function renderTimeline() {
     ? [{ id:'__active__', name:activeTask.name, startISO:activeTask.startISO, endISO:null, durationMs:Date.now()-activeTask.startTs }, ...s]
     : [...s];
 
-  // Group by IST date
+  // Group by IST date, splitting sessions that cross midnight
   const groups = {};
   allRows.forEach(r => {
-    const key = getISTDateKey(r.startISO);
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(r);
+    const segs = splitSessionByDay(r);
+    const isSplit = segs.length > 1;
+    segs.forEach(seg => {
+      const key = getISTDateKey(seg.startISO);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push({ ...seg, _isSplitSeg: isSplit });
+    });
   });
 
   const sortedKeys = Object.keys(groups).sort((a,b) => b.localeCompare(a));
@@ -1419,6 +1445,7 @@ function renderTimeline() {
       const color = COLORS[idx % COLORS.length];
       const barPct = Math.round(r.durationMs / maxMs * 100);
       const isRunning = r.id === '__active__';
+      const splitBadge = r._isSplitSeg ? ' <span style="font-size:10px;opacity:0.55;font-weight:normal">(cont\'d)</span>' : '';
       return `
         <div class="tl-row">
           <div class="tl-time">
@@ -1426,7 +1453,7 @@ function renderTimeline() {
             <div class="tl-end">${isRunning ? 'running…' : '→ ' + fmtISTTime(r.endISO)}</div>
           </div>
           <div>
-            <div class="tl-name">${esc(r.name)}</div>
+            <div class="tl-name">${esc(r.name)}${splitBadge}</div>
             <div class="tl-bar-wrap" style="margin-top:6px">
               <div class="tl-bar" style="width:${barPct}%;background:${color}"></div>
             </div>
