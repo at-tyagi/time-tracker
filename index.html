@@ -385,6 +385,10 @@ tbody td strong{color:var(--text);font-weight:600}
         <div class="chart-wrap" style="height:280px" id="line-wrap"><canvas id="line-chart"></canvas></div>
       </div>
       <div class="chart-card chart-full">
+        <h3>Daily Breakdown by Task (Lines)</h3>
+        <div class="chart-wrap" style="height:280px" id="multiline-wrap"><canvas id="multiline-chart"></canvas></div>
+      </div>
+      <div class="chart-card chart-full">
         <h3>Avg Time per Day by Task</h3>
         <div class="chart-wrap" id="avgsess-wrap"><canvas id="avgsess-chart"></canvas></div>
       </div>
@@ -1001,7 +1005,7 @@ function getFiltered() {
 // ══════════════════════════════════════════════════════════════════
 // DASHBOARD
 // ══════════════════════════════════════════════════════════════════
-let donutChart, barChart, lineChart, avgSessChart;
+let donutChart, barChart, lineChart, multilineChart, avgSessChart;
 let dailyToggleMode = 'hours';
 
 function setDailyToggle(mode) {
@@ -1292,6 +1296,49 @@ function renderDashboard() {
         scales: {
           x:{ stacked:true, ticks:{color:'#6b7280',font:{size:11},maxRotation:45}, grid:{color:'rgba(0,0,0,.06)'}, border:{color:'rgba(0,0,0,.08)'} },
           y:{ stacked:true, ticks:{color:'#6b7280',font:{size:11},callback:v=>v===0?'0':v+'h'}, grid:{color:'rgba(0,0,0,.06)'}, border:{color:'rgba(0,0,0,.08)'}, beginAtZero:true }
+        }
+      }
+    });
+  }
+
+
+  // ── multi-line: daily hours per task, one line per task ──
+  if (multilineChart) { multilineChart.destroy(); multilineChart = null; }
+  if (!allDays.length || !taskEntries.length) { emptyWrap('multiline-wrap'); }
+  else {
+    const ctx2 = resetWrap('multiline-wrap','multiline-chart');
+    const lineDatasets = taskEntries.map(([name],i) => ({
+      label: name,
+      data: allDays.map(d => +((taskDayMap[name]?.[d]||0)/3600000).toFixed(2)),
+      borderColor: COLORS[i%COLORS.length],
+      backgroundColor: COLORS[i%COLORS.length],
+      borderWidth: 2,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      tension: 0.3,
+      fill: false
+    }));
+    multilineChart = new Chart(ctx2, {
+      type: 'line',
+      data: {
+        labels: allDays.map(d => new Date(d+'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})),
+        datasets: lineDatasets
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode:'index', intersect:false },
+        plugins: {
+          legend: { position:'bottom', labels:{color:'#374151',boxWidth:12,padding:14,font:{size:12}} },
+          tooltip: {
+            callbacks: {
+              label: ctx => ctx.raw>0 ? ` ${ctx.dataset.label}: ${fmtDurHuman(ctx.raw*3600000)}` : null,
+              filter: item => item.raw>0
+            }
+          }
+        },
+        scales: {
+          x: { ticks:{color:'#6b7280',font:{size:11},maxRotation:45}, grid:{color:'rgba(0,0,0,.06)'}, border:{color:'rgba(0,0,0,.08)'} },
+          y: { ticks:{color:'#6b7280',font:{size:11},callback:v=>v===0?'0':v+'h'}, grid:{color:'rgba(0,0,0,.06)'}, border:{color:'rgba(0,0,0,.08)'}, beginAtZero:true }
         }
       }
     });
