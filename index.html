@@ -696,11 +696,16 @@ let currentPassword = null;
 let sessions = [];
 let activeTask = null; // in-memory, synced to Gist
 let saveInFlight = false; // prevent pollGist from overwriting an in-progress save
+let lastSaveTime = 0;    // timestamp of most recent local write to Gist
 
-async function loadFromGist() {
+async function loadFromGist(skipIfSavedAfter) {
   const blob = await readGist();
+  // If a local save happened after this read started, this blob is stale — skip applying.
+  if (skipIfSavedAfter !== undefined && lastSaveTime > skipIfSavedAfter) return;
   if (!blob) { sessions = []; activeTask = null; return; }
   const data = await decryptPayload(blob, currentPassword);
+  // Check again after decrypt (decrypt takes time too)
+  if (skipIfSavedAfter !== undefined && lastSaveTime > skipIfSavedAfter) return;
   sessions   = data.sessions   || [];
   activeTask = data.active     || null;
   todos      = data.todos      || [];
@@ -733,6 +738,7 @@ async function saveToGist() {
     const encToken = token ? await encryptPayload(token, currentPassword) : null;
     const blob     = await encryptPayload({ sessions, active: activeTask, todos, encToken }, currentPassword);
     await writeGist(blob);
+    lastSaveTime = Date.now();
     showSync(false, true);
   } catch (e) {
     showSync(false, false);
@@ -871,8 +877,9 @@ async function enterApp() {
   // Poll Gist immediately, then every 30s
   async function pollGist() {
     if (saveInFlight) return; // don't overwrite an in-progress save
+    const pollStarted = Date.now();
     try {
-      await loadFromGist();
+      await loadFromGist(pollStarted);
       renderDashboard();
       if (currentView === 'timeline') renderTimeline();
       if (currentView === 'todo') renderTodo();
