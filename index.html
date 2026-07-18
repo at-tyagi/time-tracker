@@ -223,6 +223,12 @@ tbody td strong{color:var(--text);font-weight:600}
 .edit-name-btn{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:.85rem;padding:2px 5px;border-radius:4px;opacity:0.6;transition:all .15s;vertical-align:middle}
 .edit-name-btn:hover{color:var(--accent);opacity:1;background:var(--accent-light)}
 .name-edit-input{display:inline;width:auto;padding:3px 7px;font-size:.82rem;border:1.5px solid var(--border2);border-radius:5px;background:var(--surface);color:var(--text);max-width:180px}
+/* ── INLINE TIME EDIT ── */
+.edit-time-btn{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:.75rem;padding:1px 4px;border-radius:4px;opacity:0;transition:all .15s;vertical-align:middle;margin-left:3px}
+tr:hover .edit-time-btn{opacity:0.5}
+.edit-time-btn:hover{color:var(--accent);opacity:1!important;background:var(--accent-light)}
+.time-edit-input{padding:2px 5px;font-size:.78rem;border:1.5px solid var(--border2);border-radius:5px;background:var(--surface);color:var(--text);width:160px}
+.time-edit-wrap{display:flex;align-items:center;gap:4px;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -1409,11 +1415,13 @@ function renderDashboard() {
     const canDelete = !isActive;
     const canEdit   = !isActive && !isSplit;
     const editBtn   = canEdit ? ` <button class="edit-name-btn" onclick="startNameEdit('${r.id}', this)" title="Edit name">✎</button>` : '';
+    const editStartBtn = canEdit ? `<button class="edit-time-btn" onclick="startTimeEdit('${r.id}','start',this)" title="Edit start time">✎</button>` : '';
+    const editEndBtn   = canEdit ? `<button class="edit-time-btn" onclick="startTimeEdit('${r.id}','end',this)" title="Edit end time">✎</button>` : '';
     return `
     <tr>
       <td><strong>${esc(r.name)}</strong>${nameBadge}${editBtn}</td>
-      <td>${fmtDT(r.startISO)}</td>
-      <td>${r.endISO ? fmtDT(r.endISO) : '—'}</td>
+      <td>${fmtDT(r.startISO)}${editStartBtn}</td>
+      <td>${r.endISO ? fmtDT(r.endISO) + editEndBtn : '—'}</td>
       <td>${fmtDurHuman(r.durationMs)}</td>
       <td>${r.endISO ? '<span class="tag tag-done">Done</span>' : '<span class="tag tag-running">Running</span>'}</td>
       <td>${canDelete ? `<button class="del-btn" onclick="deleteSession('${r.id}')" title="Delete">✕</button>` : ''}</td>
@@ -1445,6 +1453,59 @@ async function saveNameEdit(id, btn) {
   renderDashboard();
   if (currentView === 'timeline') renderTimeline();
   toast('Name updated');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INLINE TIME EDITING
+// ══════════════════════════════════════════════════════════════════
+function toDatetimeLocal(iso) {
+  // Convert ISO string to value suitable for datetime-local input (local time)
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function startTimeEdit(id, field, btn) {
+  const td = btn.parentElement;
+  const session = sessions.find(s => s.id === id);
+  if (!session) return;
+  const currentISO = field === 'start' ? session.startISO : session.endISO;
+  const otherISO   = field === 'start' ? session.endISO   : session.startISO;
+  const otherAttr  = field === 'start'
+    ? `max="${toDatetimeLocal(otherISO)}"`
+    : `min="${toDatetimeLocal(otherISO)}"`;
+  td.innerHTML = `<span class="time-edit-wrap"><input class="time-edit-input" type="datetime-local" value="${toDatetimeLocal(currentISO)}" ${otherAttr}><button onclick="saveTimeEdit('${id}','${field}',this)">✓</button><button onclick="renderDashboard()">✕</button></span>`;
+  td.querySelector('.time-edit-input').focus();
+}
+
+async function saveTimeEdit(id, field, btn) {
+  const td = btn.parentElement.parentElement;
+  const input = td.querySelector('.time-edit-input');
+  const val = input.value;
+  if (!val) { toast('Time cannot be empty', true); return; }
+
+  const newDate = new Date(val);
+  if (isNaN(newDate.getTime())) { toast('Invalid date/time', true); return; }
+  const newISO = newDate.toISOString();
+
+  const session = sessions.find(s => s.id === id);
+  if (!session) return;
+
+  const startISO = field === 'start' ? newISO : session.startISO;
+  const endISO   = field === 'end'   ? newISO : session.endISO;
+
+  if (new Date(startISO) >= new Date(endISO)) {
+    toast('Start must be before end', true); return;
+  }
+
+  const durationMs = new Date(endISO) - new Date(startISO);
+  const idx = sessions.findIndex(s => s.id === id);
+  sessions[idx] = { ...session, startISO, endISO, durationMs };
+
+  await saveSessions();
+  renderDashboard();
+  if (currentView === 'timeline') renderTimeline();
+  toast('Time updated');
 }
 
 // ══════════════════════════════════════════════════════════════════
