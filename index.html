@@ -697,15 +697,17 @@ let sessions = [];
 let activeTask = null; // in-memory, synced to Gist
 let saveInFlight = false; // prevent pollGist from overwriting an in-progress save
 let lastSaveTime = 0;    // timestamp of most recent local write to Gist
+let _saveQueue   = Promise.resolve(); // serialises all writes — no concurrent Gist writes
+let _pendingSaves = 0;               // count of saves enqueued but not yet completed
 
 async function loadFromGist(skipIfSavedAfter) {
   const blob = await readGist();
-  // If a local save happened after this read started, this blob is stale — skip applying.
-  if (skipIfSavedAfter !== undefined && lastSaveTime > skipIfSavedAfter) return;
+  // Abort if a local save happened after this poll started — Gist data is stale
+  if (skipIfSavedAfter !== undefined && (lastSaveTime > skipIfSavedAfter || _pendingSaves > 0)) return;
   if (!blob) { sessions = []; activeTask = null; return; }
   const data = await decryptPayload(blob, currentPassword);
-  // Check again after decrypt (decrypt takes time too)
-  if (skipIfSavedAfter !== undefined && lastSaveTime > skipIfSavedAfter) return;
+  // Check again after decrypt (async gap — a save may have completed while decrypting)
+  if (skipIfSavedAfter !== undefined && (lastSaveTime > skipIfSavedAfter || _pendingSaves > 0)) return;
   sessions   = data.sessions   || [];
   activeTask = data.active     || null;
   todos      = data.todos      || [];
@@ -731,21 +733,34 @@ async function loadFromGist(skipIfSavedAfter) {
 }
 
 async function saveToGist() {
-  saveInFlight = true;
-  showSync(true);
-  try {
-    const token    = get(LS.TOKEN);
-    const encToken = token ? await encryptPayload(token, currentPassword) : null;
-    const blob     = await encryptPayload({ sessions, active: activeTask, todos, encToken }, currentPassword);
-    await writeGist(blob);
-    lastSaveTime = Date.now();
-    showSync(false, true);
-  } catch (e) {
-    showSync(false, false);
-    toast('Sync failed: ' + e.message, true);
-  } finally {
-    saveInFlight = false;
-  }
+  // Snapshot state NOW — before any async gap — so concurrent mutations can't corrupt the payload
+  const snapSessions   = JSON.parse(JSON.stringify(sessions));
+  const snapActive     = activeTask ? JSON.parse(JSON.stringify(activeTask)) : null;
+  const snapTodos      = JSON.parse(JSON.stringify(todos));
+
+  _pendingSaves++;
+  // Enqueue: each save waits for the previous one to finish before touching the Gist
+  _saveQueue = _saveQueue.then(async () => {
+    saveInFlight = true;
+    showSync(true);
+    try {
+      const token    = get(LS.TOKEN);
+      const encToken = token ? await encryptPayload(token, currentPassword) : null;
+      const blob     = await encryptPayload({ sessions: snapSessions, active: snapActive, todos: snapTodos, encToken }, currentPassword);
+      await writeGist(blob);
+      lastSaveTime = Date.now();
+      _pendingSaves--;
+      // Only clear the "syncing" indicator when there are no more pending saves
+      if (_pendingSaves === 0) showSync(false, true);
+    } catch (e) {
+      _pendingSaves--;
+      showSync(false, false);
+      toast('Sync failed: ' + e.message, true);
+    } finally {
+      saveInFlight = (_pendingSaves > 0);
+    }
+  });
+  return _saveQueue;
 }
 
 // keep old name as alias so nothing else breaks
@@ -876,7 +891,7 @@ async function enterApp() {
   renderDashboard();
   // Poll Gist immediately, then every 30s
   async function pollGist() {
-    if (saveInFlight) return; // don't overwrite an in-progress save
+    if (_pendingSaves > 0) return; // skip poll entirely while any save is queued or in-flight
     const pollStarted = Date.now();
     try {
       await loadFromGist(pollStarted);
