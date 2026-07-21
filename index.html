@@ -363,7 +363,6 @@ tr:hover .edit-time-btn{opacity:0.5}
           </div>
         </div>
       </div>
-      <div id="last-sync-label" style="font-size:0.7rem;color:var(--muted);opacity:0.55;text-align:right;margin-top:4px;padding-right:2px"></div>
     </div>
 
     <!-- FILTERS -->
@@ -438,11 +437,33 @@ tr:hover .edit-time-btn{opacity:0.5}
       <div class="card-header">
         <h3>Sessions</h3>
         <div class="data-actions">
+          <button class="btn btn-outline btn-sm" onclick="toggleAddSessionForm()">+ Add session</button>
           <button class="btn btn-outline btn-sm" onclick="exportBackup()">Export backup</button>
           <label class="btn btn-outline btn-sm" style="cursor:pointer">
             Import backup<input type="file" accept=".json" onchange="importBackup(event)" style="display:none">
           </label>
         </div>
+      </div>
+      <div id="add-session-form" style="display:none;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--surface2);display:none">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+          <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px">
+            <label style="font-size:.72rem;color:var(--muted);font-weight:600">Task name</label>
+            <input type="text" id="add-sess-name" placeholder="Task name" maxlength="120" style="padding:6px 10px;font-size:.82rem;border:1.5px solid var(--border2);border-radius:6px;background:var(--surface);color:var(--text)">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label style="font-size:.72rem;color:var(--muted);font-weight:600">Start</label>
+            <input type="datetime-local" id="add-sess-start" style="padding:6px 10px;font-size:.82rem;border:1.5px solid var(--border2);border-radius:6px;background:var(--surface);color:var(--text)">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <label style="font-size:.72rem;color:var(--muted);font-weight:600">End</label>
+            <input type="datetime-local" id="add-sess-end" style="padding:6px 10px;font-size:.82rem;border:1.5px solid var(--border2);border-radius:6px;background:var(--surface);color:var(--text)">
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-green btn-sm" onclick="submitAddSession()">Add</button>
+            <button class="btn btn-outline btn-sm" onclick="toggleAddSessionForm()">Cancel</button>
+          </div>
+        </div>
+        <div id="add-sess-err" style="color:#ef4444;font-size:.78rem;margin-top:6px;display:none"></div>
       </div>
       <div class="table-wrap">
         <table>
@@ -751,7 +772,12 @@ async function saveToGist() {
       lastSaveTime = Date.now();
       _pendingSaves--;
       // Only clear the "syncing" indicator when there are no more pending saves
-      if (_pendingSaves === 0) showSync(false, true);
+      if (_pendingSaves === 0) {
+        showSync(false, true);
+        renderDashboard();
+        if (currentView === 'timeline') renderTimeline();
+        if (currentView === 'todo') renderTodo();
+      }
     } catch (e) {
       _pendingSaves--;
       showSync(false, false);
@@ -889,21 +915,15 @@ async function enterApp() {
   document.getElementById('view-timeline').style.display = 'none';
   activeTask ? showActiveUI(activeTask) : showIdleUI();
   renderDashboard();
-  // Poll Gist immediately, then every 30s
-  async function pollGist() {
-    if (_pendingSaves > 0) return; // skip poll entirely while any save is queued or in-flight
+  // Load from Gist once on page load
+  try {
     const pollStarted = Date.now();
-    try {
-      await loadFromGist(pollStarted);
-      renderDashboard();
-      if (currentView === 'timeline') renderTimeline();
-      if (currentView === 'todo') renderTodo();
-      if (activeTask) { showActiveUI(activeTask); } else { clearInterval(timerInterval); timerInterval = null; showIdleUI(); }
-      updateSyncLabel();
-    } catch (_) { /* silent */ }
-  }
-  pollGist();
-  setInterval(pollGist, 30000);
+    await loadFromGist(pollStarted);
+    renderDashboard();
+    if (currentView === 'timeline') renderTimeline();
+    if (currentView === 'todo') renderTodo();
+    if (activeTask) { showActiveUI(activeTask); } else { clearInterval(timerInterval); timerInterval = null; showIdleUI(); }
+  } catch (_) { /* silent */ }
 }
 
 
@@ -947,13 +967,7 @@ function startTask() {
   startTaskFrom('main');
 }
 
-function updateSyncLabel() {
-  const el = document.getElementById('last-sync-label');
-  if (!el) return;
-  const now = new Date();
-  const t = now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-  el.textContent = 'checked ' + t;
-}
+
 
 async function stopTask() {
   if (!activeTask) return;
@@ -1006,6 +1020,52 @@ async function deleteSession(id) {
   renderDashboard();
   if (currentView === 'timeline') renderTimeline();
   toast('Session deleted');
+  await saveSessions();
+}
+
+function toggleAddSessionForm() {
+  const form = document.getElementById('add-session-form');
+  const visible = form.style.display !== 'none';
+  form.style.display = visible ? 'none' : 'block';
+  if (!visible) {
+    document.getElementById('add-sess-name').value = '';
+    document.getElementById('add-sess-err').style.display = 'none';
+    // default start = now rounded to minute, end = start + 30min
+    const now = new Date();
+    now.setSeconds(0, 0);
+    const end = new Date(now.getTime() + 30 * 60000);
+    document.getElementById('add-sess-start').value = toDatetimeLocal(now.toISOString());
+    document.getElementById('add-sess-end').value   = toDatetimeLocal(end.toISOString());
+    setTimeout(() => document.getElementById('add-sess-name').focus(), 50);
+  }
+}
+
+async function submitAddSession() {
+  const name  = document.getElementById('add-sess-name').value.trim();
+  const start = document.getElementById('add-sess-start').value;
+  const end   = document.getElementById('add-sess-end').value;
+  const errEl = document.getElementById('add-sess-err');
+  errEl.style.display = 'none';
+  if (!name)  { errEl.textContent = 'Task name is required.'; errEl.style.display = 'block'; return; }
+  if (!start) { errEl.textContent = 'Start time is required.'; errEl.style.display = 'block'; return; }
+  if (!end)   { errEl.textContent = 'End time is required.'; errEl.style.display = 'block'; return; }
+  const startISO = new Date(start).toISOString();
+  const endISO   = new Date(end).toISOString();
+  if (endISO <= startISO) { errEl.textContent = 'End must be after start.'; errEl.style.display = 'block'; return; }
+  const session = {
+    id: crypto.randomUUID(),
+    name,
+    startISO,
+    endISO,
+    durationMs: new Date(endISO) - new Date(startISO),
+    startTs: new Date(startISO).getTime(),
+  };
+  sessions.unshift(session);
+  sessions.sort((a, b) => b.startISO.localeCompare(a.startISO));
+  document.getElementById('add-session-form').style.display = 'none';
+  renderDashboard();
+  if (currentView === 'timeline') renderTimeline();
+  toast(`Added: ${name}`);
   await saveSessions();
 }
 
